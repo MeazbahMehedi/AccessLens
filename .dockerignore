@@ -1,0 +1,9 @@
+.git
+.venv
+.idea
+.env
+*.db
+*.db-*
+__pycache__
+.pytest_cache
+app/web/static/screenshots/*.png

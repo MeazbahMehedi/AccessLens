@@ -1,26 +1,18 @@
-<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{% block title %}AccessCheck{% endblock %}</title>
-  <script>try{var t=localStorage.getItem('ac-theme');if(t)document.documentElement.dataset.theme=t}catch(e){}</script>
-  <link rel="stylesheet" href="/static/css/app.css">
-  {% block head %}{% endblock %}
-</head>
-<body>
-<a class="skip-link" href="#main">Skip to main content</a>
-<header class="topbar">
-  <a class="brand" href="/"><i aria-hidden="true"></i>AccessCheck</a>
-  <nav aria-label="Main navigation"><a href="/">New scan</a><a href="/history">Dashboard</a><a href="/docs">API</a>
-    <button id="theme" type="button" aria-label="Toggle dark mode">◐</button></nav>
-</header>
-<main id="main" tabindex="-1">{% block content %}{% endblock %}</main>
-<footer><p>AccessCheck checks common accessibility patterns. Results are automated guidance, not a compliance certification.</p></footer>
-<script>
-document.getElementById('theme').onclick=function(){var d=document.documentElement,dark=d.dataset.theme?d.dataset.theme==='dark':matchMedia('(prefers-color-scheme:dark)').matches,n=dark?'light':'dark';d.dataset.theme=n;try{localStorage.setItem('ac-theme',n)}catch(e){}};
-document.querySelectorAll('[data-count]').forEach(function(el){var to=+el.dataset.count,t0=performance.now();(function f(t){var p=Math.min((t-t0)/900,1);el.textContent=Math.round(to*(1-Math.pow(1-p,3)));if(p<1)requestAnimationFrame(f)})(t0)});
-document.querySelectorAll('.stagger > *').forEach(function(el,i){el.style.animationDelay=(i*70)+'ms'});
-</script>
-</body>
-</html>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="description" content="AccessCheck — understand accessibility issues, review evidence, and share actionable reports."><title>{% block title %}AccessCheck · Accessibility workspace{% endblock %}</title><script>try{document.documentElement.dataset.theme=localStorage.getItem('ac-theme')||'light'}catch(e){}</script><link rel="icon" href="/static/brand.svg" type="image/svg+xml"><link rel="stylesheet" href="/static/css/app.css">{% block head %}{% endblock %}</head>
+<body><a class="skip-link" href="#main">Skip to content</a>
+<svg class="symbols" aria-hidden="true"><defs>
+<symbol id="grid" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/></symbol>
+<symbol id="scan" viewBox="0 0 24 24"><path d="M9 3H4v5m11-5h5v5M4 16v5h5m11-5v5h-5M7 12h10m-5-5v10"/></symbol>
+<symbol id="history" viewBox="0 0 24 24"><path d="M3 11a9 9 0 1 1 2 7M3 4v7h7m2-4v6l4 2"/></symbol>
+<symbol id="file" viewBox="0 0 24 24"><path d="M14 3H5v18h14V8zM14 3v6h5M8 13h8m-8 4h6"/></symbol>
+<symbol id="code" viewBox="0 0 24 24"><path d="m8 7-5 5 5 5m8-10 5 5-5 5m-3-14-2 18"/></symbol>
+<symbol id="info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6m0-10v1"/></symbol>
+<symbol id="arrow" viewBox="0 0 24 24"><path d="M5 12h14m-6-6 6 6-6 6"/></symbol>
+<symbol id="moon" viewBox="0 0 24 24"><path d="M20 15A9 9 0 0 1 9 4a9 9 0 1 0 11 11z"/></symbol>
+<symbol id="check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></symbol>
+<symbol id="download" viewBox="0 0 24 24"><path d="M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5"/></symbol>
+</defs></svg>
+{% macro icon(name) %}<svg class="icon" aria-hidden="true"><use href="#{{ name }}"/></svg>{% endmacro %}
+<aside class="sidebar" id="sidebar"><a class="brand" href="/"><span class="brand-mark">{{ icon('check') }}</span>AccessCheck<span class="version">2.0</span></a><div class="workspace-label">ACCESSIBILITY WORKSPACE</div><nav aria-label="Main navigation">{% for key,label,path,ic in [('dashboard','Overview','/','grid'),('scan','New scan','/new-scan','scan'),('history','Scan history','/history','history'),('reports','Reports','/reports','file')] %}<a href="{{ path }}" {% if active==key %}aria-current="page"{% endif %}>{{ icon(ic) }}{{ label }}{% if key=='scan' %}<span class="nav-plus">+</span>{% endif %}</a>{% endfor %}<div class="nav-divider"></div><div class="workspace-label">DISCOVER</div>{% for key,label,path,ic in [('developer','Developer','/developer','code'),('about','About AccessCheck','/about','info')] %}<a href="{{ path }}" {% if active==key %}aria-current="page"{% endif %}>{{ icon(ic) }}{{ label }}</a>{% endfor %}</nav><div class="sidebar-bottom"><div class="sidebar-tip"><span class="status-dot"></span> Local-first by design<p>Your scans, in your workspace.<br>Evidence before assumptions.</p></div><a class="developer-mini" href="/developer"><span class="avatar-small">M</span><span>ItsMONIKAAKTER<small>Developer & maintainer</small></span>{{ icon('arrow') }}</a></div></aside>
+<div class="app-shell"><header class="topbar"><button class="icon-button mobile-menu" aria-label="Open navigation" aria-expanded="false" aria-controls="sidebar" id="menu">☰</button><div class="breadcrumb">Workspace <span>/</span> <strong>{{ {'dashboard':'Overview','scan':'New scan','history':'Scan history','reports':'Reports','developer':'Developer','about':'About'}.get(active,'AccessCheck') }}</strong></div><div class="top-actions"><span class="local-badge"><span class="status-dot"></span> Local workspace</span><button class="icon-button" id="theme" aria-label="Switch to dark theme">{{ icon('moon') }}</button></div></header><main id="main" tabindex="-1">{% block content %}{% endblock %}</main><footer>Built for a more accessible web.<span>Automated guidance · Always review in context</span></footer></div>
+<div id="toast" class="toast" role="status" hidden></div><script src="/static/js/app.js" defer></script>{% block scripts %}{% endblock %}</body></html>

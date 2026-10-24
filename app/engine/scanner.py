@@ -1,16 +1,20 @@
-
-"""Browser scanner. Kept independent of FastAPI and database code."""
+"""Rendered single-page accessibility checks with explicit coverage and review evidence."""
 
 import asyncio
+import re
 import sys
 import time
-from dataclasses import dataclass, asdict
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
-
 from playwright.async_api import async_playwright
-
 from app.core.config import settings
-from app.core.security import validate_public_url
+from app.core.security import validate_public_url, UnsafeURLError
+from app.core.network import (
+    ScanFailure,
+    browser_proxy_options,
+    can_retry_navigation,
+    connection_failure,
+)
 
 
 @dataclass
@@ -26,6 +30,7 @@ class Finding:
     help_url: str = ""
     source: str = "custom"
     fix: str = ""
+    category: str = "violation"
 
 
 @dataclass
@@ -35,417 +40,361 @@ class PageResult:
     load_time_ms: int
     findings: list[Finding]
     screenshot_path: str | None = None
-    notes: list[str] | None = None
+    notes: list[str] = field(default_factory=list)
+    review_items: list[dict] = field(default_factory=list)
+    metadata: dict = field(default_factory=dict)
 
 
 LEVELS = {"A": {"A"}, "AA": {"A", "AA"}, "AAA": {"A", "AA", "AAA"}}
-# custom checks that axe-core already performs better
-AXE_OVERLAP = {"image-alt", "link-name", "page-title", "page-lang",
-               "heading-h1", "main-landmark", "form-label", "target-size"}
 
 
-def _level(tags: list[str]) -> str:
-    wc = [t for t in tags if t.startswith("wcag")]
-    if any(t.endswith("aaa") for t in wc): return "AAA"
-    if any(t.endswith("aa") for t in wc): return "AA"
-    return "A"
-
-
-def _safe_target(url: str):
-    """Validate a public URL using the shared security module."""
-    return validate_public_url(url)
-
-
-def _detect_challenge(title: str, page_text: str) -> bool:
-    """Return True when a recognizable anti-bot challenge is displayed."""
-    title_lower = title.lower()
-    text_lower = page_text.lower()
-
-    challenge_markers = [
-        "just a moment...",
-        "checking your browser",
-        "verify you are human",
-        "performing security verification",
-        "enable javascript and cookies to continue",
+def _level(tags):
+    levels = [
+        m.group(1).upper() for tag in tags if (m := re.fullmatch(r"wcag(?:2|21|22)(a{1,3})", tag))
     ]
+    return max(levels, key=len) if levels else None
 
+
+def axe_findings(results, level="AA"):
+    failures, reviews, seen = [], [], set()
+    for group in ("violations", "incomplete"):
+        for rule in results.get(group, []):
+            tags = rule.get("tags", [])
+            rule_level = _level(tags)
+            if rule_level and rule_level not in LEVELS[level]:
+                continue
+            criteria = [
+                f"{m[1]}.{m[2]}.{m[3]}"
+                for tag in tags
+                if (m := re.fullmatch(r"wcag([1-4])(\d)(\d+)", tag))
+            ]
+            if not rule_level and "best-practice" not in tags:
+                continue
+            category = (
+                "review"
+                if group == "incomplete"
+                else "best-practice"
+                if not rule_level
+                else "violation"
+            )
+            for node in rule.get("nodes", []):
+                selector = " → ".join(
+                    " → ".join(x) if isinstance(x, list) else str(x) for x in node.get("target", [])
+                )
+                key = (rule["id"], selector, category)
+                if key in seen:
+                    continue
+                seen.add(key)
+                item = finding_dict(
+                    Finding(
+                        rule_id=rule["id"],
+                        impact=rule.get("impact") or "minor",
+                        message=rule.get("help", rule["id"]),
+                        selector=selector,
+                        html=node.get("html", "")[:2000],
+                        wcag_criteria=criteria,
+                        principle={
+                            "1": "perceivable",
+                            "2": "operable",
+                            "3": "understandable",
+                            "4": "robust",
+                        }.get((criteria or [""])[0][:1], "robust"),
+                        wcag_level=rule_level or "—",
+                        help_url=rule.get("helpUrl", ""),
+                        source="axe-core",
+                        fix=(
+                            node.get("failureSummary")
+                            or "Review this element in context; automatic evaluation was inconclusive."
+                        ).strip(),
+                        category=category,
+                    )
+                )
+                (failures if category == "violation" else reviews).append(item)
+    return failures, reviews
+
+
+def _detect_challenge(title, page_text):
+    title = title.lower().strip()
+    text = page_text.lower()
     return any(
-        marker in title_lower or marker in text_lower
-        for marker in challenge_markers
+        x in title
+        for x in (
+            "just a moment",
+            "checking your browser",
+            "attention required!",
+            "verify you are human",
+        )
+    ) or (
+        len(text) < 2500
+        and any(
+            x in text
+            for x in (
+                "performing security verification",
+                "enable javascript and cookies to continue",
+                "verify you are human",
+            )
+        )
     )
 
 
-async def scan_page(
-    url: str, screenshot_path: str | None = None, wcag_level: str = "AA"
-) -> PageResult:
-    await asyncio.to_thread(_safe_target, url)  # DNS lookups block; keep them off the loop
+async def scan_page(url, screenshot_path=None, wcag_level="AA"):
+    if wcag_level not in LEVELS:
+        raise ValueError("Invalid WCAG level")
+    await asyncio.to_thread(validate_public_url, url)
+    try:
+        async with asyncio.timeout(settings.scan_timeout_seconds + 60):
+            return await _scan(url, screenshot_path, wcag_level)
+    except TimeoutError as exc:
+        raise ScanFailure(
+            "The overall scan time limit was reached. The page or its network requests took too long; no score was generated.",
+            "scan_timeout",
+            "scan",
+        ) from exc
 
+
+async def _scan(url, screenshot_path, wcag_level):
     start = time.monotonic()
-    findings: list[Finding] = []
-    notes: list[str] = []
-    axe_ran = False
-
+    notes = []
+    validated = {}
+    navigation_errors = []
+    blocked_resources = set()
     async with async_playwright() as p:
-        browser = await p.chromium.launch(
-            headless=True,
-            args=["--no-sandbox"],
-        )
-        context = await browser.new_context(
-            viewport={"width": 1366, "height": 900}
-        )
-        page = await context.new_page()
-
+        proxy, proxy_source = browser_proxy_options()
         try:
-            await page.goto(
-                url,
-                wait_until="domcontentloaded",
-                timeout=settings.scan_timeout_seconds * 1000,
+            browser = await p.chromium.launch(
+                headless=True, args=["--no-sandbox"], **({"proxy": proxy} if proxy else {})
             )
+        except Exception as exc:
+            raise connection_failure(exc) from exc
+        context = await browser.new_context(
+            viewport={"width": 1366, "height": 900}, service_workers="block", accept_downloads=False
+        )
 
-            # let JS-rendered content settle (best effort, never fatal)
-            for state in ("load", "networkidle"):
-                try:
-                    await page.wait_for_load_state(state, timeout=6000)
-                except Exception:
-                    break
-
-            final_url = page.url
-            await asyncio.to_thread(_safe_target, final_url)
-
-            title = await page.title()
-            page_text = ""
-
+        async def guard(route):
+            target = route.request.url
+            if target.startswith(("data:", "blob:")):
+                return await route.continue_()
             try:
-                page_text = (
-                    await page.locator("body").inner_text(timeout=5000)
-                ).lower()
-            except Exception:
-                # The page may not expose readable body text.
-                pass
+                from urllib.parse import urlsplit
 
-            if _detect_challenge(title, page_text):
-                raise RuntimeError(
-                    "Scan blocked: The website presented an anti-bot "
-                    "security challenge. The actual page could not be "
-                    "inspected, so accessibility findings are unavailable."
-                )
+                origin = urlsplit(target).netloc
+                if origin not in validated:
+                    validated[origin] = asyncio.create_task(
+                        asyncio.to_thread(validate_public_url, target)
+                    )
+                await validated[origin]
+                await route.continue_()
+            except Exception as exc:
+                blocked_resources.add(target)
+                if route.request.is_navigation_request() and route.request.frame == page.main_frame:
+                    navigation_errors.append(exc)
+                await route.abort("blockedbyclient")
 
-            load_ms = int((time.monotonic() - start) * 1000)
+        await context.route("**/*", guard)
 
-            axe_path = Path(settings.axe_js_path)
+        async def block_socket(socket):
+            await socket.close()
 
-            axe = {}
-            if not axe_path.exists():
-                notes.append("axe-core is not installed, so only basic checks ran. "
-                             "Run: python scripts/fetch_axe.py")
-            else:
-              try:
-                await page.add_script_tag(path=str(axe_path))
-                axe = await page.evaluate(
-                    """async () =>
-                        await axe.run(document, {
-                            resultTypes: ['violations']
-                        })
-                    """
-                )
-                axe_ran = True
-              except Exception as exc:
-                notes.append(f"axe-core could not run on this page ({type(exc).__name__}); basic checks only.")
+        await context.route_web_socket("**/*", block_socket)
+        page = await context.new_page()
+        # Playwright routing does not intercept every hop in a redirect chain.
+        # Pause Chromium responses and validate Location before it follows them.
+        session = await context.new_cdp_session(page)
+        main_frame_id = (await session.send("Page.getFrameTree"))["frameTree"]["frame"]["id"]
 
-            if True:
-                for violation in axe.get("violations", []):
-                    tags = violation.get("tags", [])
-                    if _level(tags) not in LEVELS.get(wcag_level, LEVELS["AA"]):
+        async def check_redirect(event):
+            from urllib.parse import urljoin
+
+            request_id = event["requestId"]
+            try:
+                status = event.get("responseStatusCode", 0)
+                if status in (301, 302, 303, 307, 308):
+                    location = next(
+                        (
+                            h["value"]
+                            for h in event.get("responseHeaders", [])
+                            if h["name"].lower() == "location"
+                        ),
+                        None,
+                    )
+                    if location:
+                        await asyncio.to_thread(
+                            validate_public_url, urljoin(event["request"]["url"], location)
+                        )
+                await session.send("Fetch.continueResponse", {"requestId": request_id})
+            except Exception as exc:
+                blocked_resources.add(event["request"]["url"])
+                if event.get("frameId") == main_frame_id:
+                    navigation_errors.append(exc)
+                try:
+                    await session.send(
+                        "Fetch.failRequest",
+                        {"requestId": request_id, "errorReason": "BlockedByClient"},
+                    )
+                except Exception:
+                    pass  # Browser shutdown may cancel an in-flight interception.
+
+        session.on("Fetch.requestPaused", check_redirect)
+        await session.send(
+            "Fetch.enable", {"patterns": [{"urlPattern": "*", "requestStage": "Response"}]}
+        )
+        try:
+            response = None
+            for attempt in range(2):
+                try:
+                    response = await page.goto(
+                        url,
+                        wait_until="domcontentloaded",
+                        timeout=settings.scan_timeout_seconds * 1000,
+                    )
+                    break
+                except Exception as exc:
+                    if navigation_errors:
+                        raise navigation_errors[-1] from exc
+                    if attempt == 0 and can_retry_navigation(exc):
                         continue
-                    criteria = []
-
-                    for tag in tags:
-                        if (
-                            tag.startswith("wcag")
-                            and len(tag) >= 7
-                            and tag[4].isdigit()
-                        ):
-                            digits = tag[4:]
-                            if (
-                                len(digits) >= 3
-                                and digits[:3].isdigit()
-                            ):
-                                criteria.append(
-                                    f"{digits[0]}.{digits[1]}.{digits[2:]}"
-                                )
-
-                    first = criteria[0] if criteria else ""
-                    principle = {
-                        "1": "perceivable",
-                        "2": "operable",
-                        "3": "understandable",
-                        "4": "robust",
-                    }.get(first[:1], "robust")
-
-                    for node in violation.get("nodes", []):
-                        findings.append(
-                            Finding(
-                                rule_id=violation["id"],
-                                impact=violation.get("impact") or "minor",
-                                message=(
-                                    violation.get("help")
-                                    or violation["id"]
-                                ),
-                                selector=", ".join(
-                                    str(x)
-                                    for x in node.get("target", [])
-                                ),
-                                html=node.get("html", ""),
-                                wcag_criteria=criteria,
-                                principle=principle,
-                                wcag_level=_level(tags),
-                                help_url=violation.get("helpUrl", ""),
-                                source="axe",
-                                fix=(node.get("failureSummary") or "").strip(),
-                            )
-                        )
-
-            custom = await page.evaluate(
-                """() => {
-                    const out = [];
-
-                    const cssPath = el => {
-                        if (el.id) return '#' + CSS.escape(el.id);
-                        const parts = [];
-                        while (el && el.nodeType === 1
-                               && el !== document.documentElement) {
-                            let part = el.tagName.toLowerCase();
-                            const same = el.parentElement
-                                ? [...el.parentElement.children]
-                                    .filter(c => c.tagName === el.tagName)
-                                : [];
-                            if (same.length > 1)
-                                part += ':nth-of-type(' + (same.indexOf(el) + 1) + ')';
-                            parts.unshift(part);
-                            el = el.parentElement;
-                        }
-                        return parts.length ? 'html > ' + parts.join(' > ') : 'html';
-                    };
-
-                    const add = (
-                        rule, impact, message, el,
-                        wcag, principle, fix
-                    ) => out.push({
-                        rule_id: rule,
-                        impact,
-                        message,
-                        selector: el ? cssPath(el) : 'html',
-                        html: el ? el.outerHTML.slice(0, 500) : '',
-                        wcag_criteria: wcag,
-                        principle,
-                        wcag_level: 'A',
-                        source: 'custom',
-                        fix
-                    });
-
-                    if (!document.documentElement.lang) {
-                        add(
-                            'page-lang', 'serious',
-                            'Document language is missing.',
-                            document.documentElement,
-                            ['3.1.1'], 'understandable',
-                            'Add a correct lang attribute, e.g. <html lang="en">.'
-                        );
-                    }
-
-                    if (!document.title.trim()) {
-                        add(
-                            'page-title', 'serious',
-                            'Page title is missing or empty.',
-                            document.querySelector('head title'),
-                            ['2.4.2'], 'operable',
-                            'Add a concise, descriptive <title>.'
-                        );
-                    }
-
-                    const headings = [
-                        ...document.querySelectorAll(
-                            'h1,h2,h3,h4,h5,h6'
-                        )
-                    ];
-
-                    if (!headings.some(h => h.tagName === 'H1')) {
-                        add(
-                            'heading-h1', 'moderate',
-                            'Page has no level-one heading.',
-                            document.querySelector('main') || document.body,
-                            ['1.3.1', '2.4.6'], 'perceivable',
-                            'Add one descriptive <h1> for the main page heading.'
-                        );
-                    }
-
-                    for (const el of document.querySelectorAll('img')) {
-                        if (!el.hasAttribute('alt')) {
-                            add(
-                                'image-alt', 'serious',
-                                'Image is missing an alt attribute.',
-                                el, ['1.1.1'], 'perceivable',
-                                'Add meaningful alt text, or alt="" for decorative images.'
-                            );
-                        }
-                    }
-
-                    for (const el of document.querySelectorAll(
-                        'input:not([type=hidden]):not([type=submit]):not([type=button]):not([type=reset]):not([type=image]),select,textarea'
-                    )) {
-                        if (
-                            !el.labels?.length &&
-                            !el.getAttribute('aria-label') &&
-                            !el.getAttribute('aria-labelledby')
-                        ) {
-                            add(
-                                'form-label', 'serious',
-                                'Form control has no programmatic label.',
-                                el, ['3.3.2', '4.1.2'],
-                                'understandable',
-                                'Associate a <label for="..."> with the control or provide an accessible name.'
-                            );
-                        }
-                    }
-
-                    for (const el of document.querySelectorAll('a,button')) {
-                        const text = (
-                            el.innerText ||
-                            el.getAttribute('aria-label') ||
-                            el.getAttribute('aria-labelledby') && 'x' ||
-                            el.getAttribute('title') ||
-                            el.querySelector('img[alt]:not([alt=""])')?.alt ||
-                            el.querySelector('svg title')?.textContent ||
-                            ''
-                        ).trim().toLowerCase();
-
-                        if (!text) {
-                            add(
-                                'link-name', 'serious',
-                                'Link or button has no accessible name.',
-                                el, ['2.4.4', '4.1.2'], 'operable',
-                                'Add descriptive visible text or an accessible name.'
-                            );
-                        } else if (
-                            el.tagName === 'A' &&
-                            ['click here', 'read more', 'here', 'more'].includes(text)
-                        ) {
-                            add(
-                                'link-purpose', 'moderate',
-                                'Link text may not explain its destination.',
-                                el, ['2.4.4'], 'operable',
-                                'Use link text that describes the destination or action.'
-                            );
-                        }
-                    }
-
-                    if (!document.querySelector('main,[role=main]')) {
-                        add(
-                            'main-landmark', 'moderate',
-                            'Page has no main landmark.',
-                            document.body, ['1.3.1'], 'perceivable',
-                            'Wrap primary content in <main>.'
-                        );
-                    }
-
-                    for (const el of document.querySelectorAll(
-                        'a,button,input,select,textarea,[role=button]'
-                    )) {
-                        const rect = el.getBoundingClientRect();
-
-                        if (
-                            rect.width &&
-                            rect.height &&
-                            (rect.width < 24 || rect.height < 24)
-                        ) {
-                            add(
-                                'target-size', 'minor',
-                                'Interactive target is smaller than 24 by 24 CSS pixels.',
-                                el, ['2.5.8'], 'operable',
-                                'Increase the target to at least 24×24 CSS pixels or provide sufficient spacing.'
-                            );
-                        }
-                    }
-
-                    return out;
-                }"""
-            )
-
-            existing = {
-                (finding.rule_id, finding.selector)
-                for finding in findings
+                    raise connection_failure(exc) from exc
+            if attempt:
+                notes.append(
+                    "A transient connection failed once; the page loaded on the second attempt."
+                )
+            if response and response.status >= 400:
+                raise ScanFailure(
+                    f"Website returned HTTP {response.status}; the intended page was not audited. The server may require login, reject automated visitors, or be unavailable.",
+                    "http_error",
+                    "page_access",
+                )
+            try:
+                await page.wait_for_load_state("networkidle", timeout=5000)
+            except Exception:
+                notes.append(
+                    "The page continued making requests. Results reflect the rendered state at capture time."
+                )
+            await page.wait_for_timeout(1000)
+            final_url = await asyncio.to_thread(validate_public_url, page.url)
+            title = await page.title()
+            text = await page.locator("body").inner_text(timeout=5000)
+            if _detect_challenge(title, text):
+                raise ScanFailure(
+                    "The site presented an anti-bot challenge. No accessibility score was generated for the intended page.",
+                    "site_challenge",
+                    "page_access",
+                )
+            if "consent" in final_url.lower() or "before you continue" in title.lower():
+                notes.append(
+                    "A consent page may be displayed. Review the screenshot; this report covers only that rendered state."
+                )
+            metadata = {
+                "network_route": proxy_source,
+                "final_url": final_url,
+                "viewport": {"width": 1366, "height": 900},
+                "coverage": "basic",
+                "engine": "Basic checks",
+                "passed_rules": 0,
+                "inapplicable_rules": 0,
+                "wcag_version": "2.2",
+                "scoring_version": "2",
+                "http_status": response.status if response else None,
             }
-
-            for item in custom:
-                if axe_ran and item["rule_id"] in AXE_OVERLAP:
-                    continue
-                key = (item["rule_id"], item["selector"])
-                if key not in existing:
-                    findings.append(Finding(**item))
-                    existing.add(key)
-
+            failures = []
+            reviews = []
+            axe_path = Path(settings.axe_js_path)
+            if axe_path.is_file():
+                try:
+                    await page.add_script_tag(path=str(axe_path))
+                    tags = [
+                        tag
+                        for tag in (
+                            "wcag2a",
+                            "wcag2aa",
+                            "wcag2aaa",
+                            "wcag21a",
+                            "wcag21aa",
+                            "wcag21aaa",
+                            "wcag22aa",
+                        )
+                        if _level([tag]) in LEVELS[wcag_level]
+                    ] + ["best-practice"]
+                    result = await page.evaluate(
+                        "async tags => await axe.run(document,{runOnly:{type:'tag',values:tags}})",
+                        tags,
+                    )
+                    failures, reviews = axe_findings(result, wcag_level)
+                    metadata.update(
+                        coverage="axe",
+                        engine=f"axe-core {result.get('testEngine', {}).get('version', '')}",
+                        passed_rules=len(result.get("passes", [])),
+                        inapplicable_rules=len(result.get("inapplicable", [])),
+                    )
+                except Exception as exc:
+                    notes.append(
+                        f"axe-core could not complete ({type(exc).__name__}); only basic checks ran. Coverage is limited."
+                    )
+            else:
+                notes.append(
+                    "axe-core is missing. Only basic checks ran; contrast, ARIA and many WCAG criteria were not evaluated. Run python scripts/fetch_axe.py."
+                )
+            if metadata["coverage"] == "basic":
+                basic = await page.evaluate(
+                    Path(__file__).with_name("checks.js").read_text(encoding="utf-8")
+                )
+                failures = [x for x in basic if x["category"] == "violation"]
+                reviews = [x for x in basic if x["category"] != "violation"]
+            failures.sort(
+                key=lambda x: (
+                    {"critical": 0, "serious": 1, "moderate": 2, "minor": 3}.get(x["impact"], 4),
+                    x["rule_id"],
+                )
+            )
+            shot = None
             if screenshot_path:
-                Path(screenshot_path).parent.mkdir(
-                    parents=True, exist_ok=True
+                try:
+                    Path(screenshot_path).parent.mkdir(parents=True, exist_ok=True)
+                    selectors = [i["selector"] for i in failures if " → " not in i["selector"]][
+                        :200
+                    ]
+                    await page.evaluate(
+                        "selectors=>selectors.forEach(s=>{try{document.querySelectorAll(s).forEach(e=>{e.style.outline='3px solid #e24455';e.style.outlineOffset='2px'})}catch(e){}})",
+                        selectors,
+                    )
+                    height = await page.evaluate(
+                        "Math.min(Math.max(document.documentElement.scrollHeight,900),16000)"
+                    )
+                    await page.screenshot(
+                        path=screenshot_path,
+                        clip={"x": 0, "y": 0, "width": 1366, "height": height},
+                        timeout=15000,
+                    )
+                    shot = screenshot_path
+                except Exception:
+                    notes.append(
+                        "Screenshot capture failed; accessibility findings were saved successfully."
+                    )
+            if blocked_resources:
+                notes.append(
+                    f"{len(blocked_resources)} request(s) could not be publicly verified and were blocked. Some page content may be missing."
                 )
-
-                selectors = [
-                    finding.selector
-                    for finding in findings
-                    if finding.selector
-                    and finding.selector != "html"
-                ][:300]
-
-                await page.evaluate(
-                    """(selectors) => {
-                        for (const selector of selectors) {
-                            try {
-                                document.querySelectorAll(selector)
-                                    .forEach(el => {
-                                        el.style.outline =
-                                            '3px solid #d92d20';
-                                        el.style.outlineOffset = '2px';
-                                    });
-                            } catch (_) {}
-                        }
-                    }""",
-                    selectors,
-                )
-
-                await page.screenshot(
-                    path=screenshot_path,
-                    full_page=True,
-                )
-
+            metadata["load_time_ms"] = int((time.monotonic() - start) * 1000)
             return PageResult(
                 final_url,
                 title,
-                load_ms,
-                findings,
-                screenshot_path,
+                metadata["load_time_ms"],
+                [Finding(**i) for i in failures],
+                shot,
                 notes,
+                reviews,
+                metadata,
             )
-
-        except Exception as exc:
-            print(
-                f"[AccessCheck] Scan failed for {url}: "
-                f"{type(exc).__name__}: {exc}",
-                flush=True,
-            )
-            raise
-
         finally:
             await browser.close()
 
 
 def _run_in_own_loop(url, shot, level):
-    """Playwright launches a subprocess; on Windows that needs a Proactor loop,
-    which uvicorn (esp. with --reload) does not provide. Use our own."""
-    loop = (asyncio.ProactorEventLoop() if sys.platform == "win32"
-            else asyncio.new_event_loop())
+    loop = asyncio.ProactorEventLoop() if sys.platform == "win32" else asyncio.new_event_loop()
     try:
         return loop.run_until_complete(scan_page(url, shot, level))
     finally:
+        loop.run_until_complete(loop.shutdown_asyncgens())
         loop.close()
 
 
@@ -453,13 +402,11 @@ async def scan_page_isolated(url, screenshot_path=None, wcag_level="AA"):
     return await asyncio.to_thread(_run_in_own_loop, url, screenshot_path, wcag_level)
 
 
-def run_scan(
-    url: str, screenshot_path: str | None = None
-) -> PageResult:
+def run_scan(url, screenshot_path=None):
     return _run_in_own_loop(url, screenshot_path, "AA")
 
 
-def finding_dict(finding: Finding) -> dict:
+def finding_dict(finding):
     data = asdict(finding)
     data["wcag_criteria"] = data["wcag_criteria"] or []
     return data
