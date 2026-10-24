@@ -1,0 +1,8 @@
+{% extends "base.html" %}
+{% block title %}Scan history · AccessCheck{% endblock %}
+{% block content %}
+<div class="page-heading"><div><p class="eyebrow">YOUR WORKSPACE</p><h1>Scan history</h1><p class="lead">Review recent scans saved in this local instance.</p></div><a class="button" href="/">New scan</a></div>
+<section class="panel"><div class="table-wrap"><table><thead><tr><th scope="col">Website</th><th scope="col">Date</th><th scope="col">Status</th><th scope="col">Score</th><th scope="col">Issues</th><th scope="col">Report</th></tr></thead><tbody>
+{% for scan in scans %}<tr><td><strong>{{ scan.title or scan.url }}</strong><p class="muted">{{ scan.url }}</p></td><td>{{ scan.created_at.strftime('%Y-%m-%d %H:%M UTC') if scan.created_at else '—' }}</td><td>{{ scan.status }}</td><td>{{ scan.score }}/100</td><td>{{ scan.issue_count }}</td><td><a href="/scan/{{ scan.id }}">View results</a></td></tr>{% else %}<tr><td colspan="6">No scans yet. Start your first scan.</td></tr>{% endfor %}
+</tbody></table></div></section>
+{% endblock %}

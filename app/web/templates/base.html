@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>{% block title %}AccessCheck{% endblock %}</title>
+  <link rel="stylesheet" href="/static/css/app.css">
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to main content</a>
+<header class="topbar">
+  <a class="brand" href="/">AccessCheck<span aria-hidden="true">.</span></a>
+  <nav aria-label="Main navigation"><a href="/">New scan</a><a href="/history">History</a><a href="/docs">API docs</a></nav>
+</header>
+<main id="main" tabindex="-1">{% block content %}{% endblock %}</main>
+<footer><p>AccessCheck checks common accessibility patterns. Results are automated guidance, not a compliance certification.</p></footer>
+</body>
+</html>

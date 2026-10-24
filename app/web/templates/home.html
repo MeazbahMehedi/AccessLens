@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Website accessibility scan · AccessCheck{% endblock %}
+{% block content %}
+<section class="hero">
+  <p class="eyebrow">WEB ACCESSIBILITY ANALYSIS</p>
+  <h1>Make your website more accessible.</h1>
+  <p class="lead">Scan a public website for common WCAG issues, review suggested fixes, and export a report.</p>
+</section>
+<section class="panel form-panel" aria-labelledby="scan-title">
+  <h2 id="scan-title">Start a new scan</h2>
+  {% if error %}<div class="alert" role="alert">{{ error }}</div>{% endif %}
+  <form action="/scan" method="post">
+    <label for="url">Website URL</label>
+    <input id="url" name="url" type="url" placeholder="https://example.com" required autocomplete="url">
+    <fieldset>
+      <legend>WCAG target level</legend>
+      <label class="radio"><input type="radio" name="wcag_level" value="A"> WCAG A</label>
+      <label class="radio"><input type="radio" name="wcag_level" value="AA" checked> WCAG AA</label>
+      <label class="radio"><input type="radio" name="wcag_level" value="AAA"> WCAG AAA</label>
+    </fieldset>
+    <button type="submit">Run accessibility scan <span aria-hidden="true">→</span></button>
+    <p class="hint">Only scan websites you own or have permission to test. Local and private network targets are blocked.</p>
+  </form>
+</section>
+<section class="feature-grid" aria-label="What AccessCheck checks">
+  <article class="feature"><span class="feature-icon" aria-hidden="true">◉</span><h2>Find issues</h2><p>Images, forms, headings, links, language and interactive targets.</p></article>
+  <article class="feature"><span class="feature-icon" aria-hidden="true">▧</span><h2>Understand impact</h2><p>Review severity, WCAG criteria, affected selectors and suggested fixes.</p></article>
+  <article class="feature"><span class="feature-icon" aria-hidden="true">↗</span><h2>Share results</h2><p>Download JSON, CSV and PDF reports for your team.</p></article>
+</section>
+{% endblock %}

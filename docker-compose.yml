@@ -1,0 +1,23 @@
+services:
+  web:
+    build: .
+    ports: ["8000:8000"]
+    environment:
+      DATABASE_URL: sqlite+aiosqlite:///./accesscheck.db
+      REDIS_URL: redis://redis:6379/0
+    volumes:
+      - accesscheck-data:/srv/accesscheck
+    depends_on: [redis, db]
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: accesscheck
+      POSTGRES_USER: accesscheck
+      POSTGRES_PASSWORD: accesscheck-dev-only
+    volumes: [postgres-data:/var/lib/postgresql/data]
+  redis:
+    image: redis:7-alpine
+    ports: ["6379:6379"]
+volumes:
+  accesscheck-data:
+  postgres-data:
