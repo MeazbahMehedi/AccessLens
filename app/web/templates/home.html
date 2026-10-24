@@ -1,30 +1,30 @@
 {% extends "base.html" %}
 {% block title %}Website accessibility scan · AccessCheck{% endblock %}
 {% block content %}
-<section class="hero">
+<section class="hero"><span class="blob b1"></span><span class="blob b2"></span>
   <p class="eyebrow">WEB ACCESSIBILITY ANALYSIS</p>
-  <h1>Make your website more accessible.</h1>
-  <p class="lead">Scan a public website for common WCAG issues, review suggested fixes, and export a report.</p>
+  <h1>Make your website <em>work for everyone.</em></h1>
+  <p class="lead">Scan any public website for WCAG issues, see what matters most, get fixes, and export a report.</p>
 </section>
 <section class="panel form-panel" aria-labelledby="scan-title">
   <h2 id="scan-title">Start a new scan</h2>
-  {% if error %}<div class="alert" role="alert">{{ error }}</div>{% endif %}
-  <form action="/scan" method="post">
-    <label for="url">Website URL</label>
-    <input id="url" name="url" type="url" placeholder="https://example.com" required autocomplete="url">
-    <fieldset>
-      <legend>WCAG target level</legend>
-      <label class="radio"><input type="radio" name="wcag_level" value="A"> WCAG A</label>
-      <label class="radio"><input type="radio" name="wcag_level" value="AA" checked> WCAG AA</label>
-      <label class="radio"><input type="radio" name="wcag_level" value="AAA"> WCAG AAA</label>
+  {% if error %}<div class="alert" role="alert"><span class="ico" aria-hidden="true">⚠</span><div><h2>Can’t scan that address</h2><p>{{ error }}</p></div></div>{% endif %}
+  <form action="/scan" method="post" id="scan-form">
+    <label for="url">Website address</label>
+    <input id="url" name="url" type="text" inputmode="url" placeholder="example.com or https://example.com" required autocomplete="url" autocapitalize="off" spellcheck="false">
+    <fieldset><legend>WCAG target level</legend>
+      <div class="seg"><label><input type="radio" name="wcag_level" value="A"><span>A</span></label><label><input type="radio" name="wcag_level" value="AA" checked><span>AA</span></label><label><input type="radio" name="wcag_level" value="AAA"><span>AAA</span></label></div>
     </fieldset>
-    <button type="submit">Run accessibility scan <span aria-hidden="true">→</span></button>
-    <p class="hint">Only scan websites you own or have permission to test. Local and private network targets are blocked.</p>
+    <button type="submit" id="go">Run accessibility scan <span aria-hidden="true">→</span></button>
+    <p class="hint" role="status" id="status">Only scan websites you own or have permission to test. Local and private network targets are blocked.</p>
   </form>
 </section>
-<section class="feature-grid" aria-label="What AccessCheck checks">
-  <article class="feature"><span class="feature-icon" aria-hidden="true">◉</span><h2>Find issues</h2><p>Images, forms, headings, links, language and interactive targets.</p></article>
-  <article class="feature"><span class="feature-icon" aria-hidden="true">▧</span><h2>Understand impact</h2><p>Review severity, WCAG criteria, affected selectors and suggested fixes.</p></article>
+<section class="feature-grid stagger" aria-label="What AccessCheck checks">
+  <article class="feature"><span class="feature-icon" aria-hidden="true">◉</span><h2>Find issues</h2><p>axe-core plus custom checks for images, forms, headings, links, language and tap targets.</p></article>
+  <article class="feature"><span class="feature-icon" aria-hidden="true">▲</span><h2>Prioritise by impact</h2><p>Critical to minor severity, WCAG criteria, affected elements and suggested fixes.</p></article>
   <article class="feature"><span class="feature-icon" aria-hidden="true">↗</span><h2>Share results</h2><p>Download JSON, CSV and PDF reports for your team.</p></article>
 </section>
+<script>
+document.getElementById('scan-form').addEventListener('submit',function(){var b=document.getElementById('go');b.disabled=true;b.innerHTML='<span class="spin" aria-hidden="true"></span> Starting scan…';document.getElementById('status').textContent='Checking the address and starting the browser…'});
+</script>
 {% endblock %}

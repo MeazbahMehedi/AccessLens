@@ -1,41 +1,93 @@
 {% extends "base.html" %}
 {% block title %}Scan results · AccessCheck{% endblock %}
+{% block head %}{% if scan.status in ('queued','running') %}<noscript><meta http-equiv="refresh" content="3"></noscript>{% endif %}{% endblock %}
 {% block content %}
+{% set sc = scan.score or 0 %}
+{% set cls = 's-ok' if sc >= 90 else 's-good' if sc >= 75 else 's-warn' if sc >= 50 else 's-bad' %}
+{% set grade = 'Excellent' if sc >= 90 else 'Good' if sc >= 75 else 'Needs work' if sc >= 50 else 'Poor' %}
 <div class="page-heading">
-  <div><p class="eyebrow">SCAN REPORT</p><h1>{{ scan.title or scan.url }}</h1><p class="muted"><a href="{{ scan.url }}" rel="noreferrer">{{ scan.url }}</a></p></div>
+  <div><p class="eyebrow">SCAN REPORT · WCAG {{ scan.wcag_level }}</p><h1>{{ scan.title or scan.url }}</h1><p class="muted"><a href="{{ scan.url }}" rel="noreferrer">{{ scan.url }}</a></p></div>
   <a class="button secondary" href="/">New scan</a>
 </div>
-{% if scan.status == "failed" %}
-  <div class="alert" role="alert"><h2>Scan failed</h2><p>{{ scan.error }}</p></div>
+
+{% if scan.status in ('queued','running') %}
+  <section class="panel scanning" role="status" aria-live="polite">
+    <div class="orbit" aria-hidden="true"></div><h2>Scanning {{ scan.url }}</h2>
+    <p class="muted">Usually 10–40 seconds. This page updates automatically.</p><div class="shimmer" aria-hidden="true"></div>
+    <ul class="steps" aria-hidden="true"><li>● Launching browser</li><li>● Loading the page</li><li>● Running accessibility rules</li><li>● Building your report</li></ul>
+  </section>
+  <script>(function t(){fetch('/api/scans/{{ scan.id }}/status').then(r=>r.json()).then(d=>{if(d.status==='done'||d.status==='failed')location.reload();else setTimeout(t,1500)}).catch(()=>setTimeout(t,3000))})()</script>
+
+{% elif scan.status == "failed" %}
+  {% set e = (scan.error or '')|lower %}
+  <div class="alert" role="alert"><span class="ico" aria-hidden="true">✖</span><div><h2>Scan failed</h2><p><code>{{ scan.error or 'Unknown error' }}</code></p>
+    <p>{% if 'notimplemented' in e %}The browser could not start (Windows event-loop issue). Update to the latest AccessCheck code and restart the server.
+    {% elif 'executable' in e or 'playwright install' in e %}Chromium is not installed. Run <code>playwright install chromium</code>, then try again.
+    {% elif 'blocked' in e or 'challenge' in e %}This site shows an anti-bot check to automated browsers, so it can’t be inspected. Try a different page or site you own.
+    {% elif 'timeout' in e %}The site took too long to load. Try again, or raise <code>SCAN_TIMEOUT_SECONDS</code> in <code>.env</code>.
+    {% elif 'resolve' in e or 'dns' in e %}The address couldn’t be resolved. Check the spelling and your internet connection.
+    {% elif 'interrupted' in e %}The server restarted during this scan. Please start it again.
+    {% else %}Try again. If it keeps failing, check the terminal for “SCAN ERROR DETAILS”.{% endif %}</p></div></div>
+
 {% else %}
-  <section class="score-layout" aria-label="Accessibility score and issue counts">
-    <article class="score-card"><p class="eyebrow">ACCESSIBILITY SCORE</p><p class="score">{{ scan.score }}<span>/100</span></p><p class="grade">{% if scan.score >= 90 %}Excellent{% elif scan.score >= 75 %}Good{% elif scan.score >= 50 %}Needs work{% else %}Poor{% endif %}</p></article>
-    <div class="severity-grid">
-      <article class="severity critical"><span>Critical</span><strong>{{ scan.critical_count }}</strong></article>
-      <article class="severity serious"><span>Serious</span><strong>{{ scan.serious_count }}</strong></article>
-      <article class="severity moderate"><span>Moderate</span><strong>{{ scan.moderate_count }}</strong></article>
-      <article class="severity minor"><span>Minor</span><strong>{{ scan.minor_count }}</strong></article>
+  {% if scan.critical_count %}<div class="banner crit" role="alert"><span class="ico" aria-hidden="true">⛔</span><div><h2>{{ scan.critical_count }} critical issue{{ 's' if scan.critical_count != 1 }} found</h2><p>These can completely block some people from using the page. Fix these first.</p></div></div>
+  {% elif scan.serious_count %}<div class="banner warn" role="status"><span class="ico" aria-hidden="true">⚠</span><div><h2>{{ scan.serious_count }} serious issue{{ 's' if scan.serious_count != 1 }} found</h2><p>These make the page hard to use for many people with disabilities.</p></div></div>
+  {% elif not issues %}<div class="banner good" role="status"><span class="ico" aria-hidden="true">✔</span><div><h2>No issues detected</h2><p>Automated checks only catch part of WCAG. Test with a keyboard and screen reader too.</p></div></div>{% endif %}
+  {% if scan.error %}<div class="banner info" role="status"><span class="ico" aria-hidden="true">ℹ</span><div><p>{{ scan.error }}</p></div></div>{% endif %}
+
+  {% set total = scan.issue_count or 1 %}
+  <section class="dash" aria-label="Score and severity">
+    <article class="panel score-card {{ cls }}">
+      <p class="eyebrow">ACCESSIBILITY SCORE</p>
+      <div class="ring" style="--off:{{ (339.3 * (1 - sc/100))|round(1) }}"><svg viewBox="0 0 120 120" width="200" height="200" aria-hidden="true"><circle class="bg" cx="60" cy="60" r="54"/><circle class="fg" cx="60" cy="60" r="54"/></svg><b><span data-count="{{ sc }}">{{ sc }}</span><small>out of 100</small></b></div>
+      <span class="pill">{{ grade }}</span>
+    </article>
+    <div class="panel" style="margin:1.25rem 0">
+      <div class="sev stagger">
+        <article class="critical"><span>Critical</span><strong data-count="{{ scan.critical_count }}">{{ scan.critical_count }}</strong></article>
+        <article class="serious"><span>Serious</span><strong data-count="{{ scan.serious_count }}">{{ scan.serious_count }}</strong></article>
+        <article class="moderate"><span>Moderate</span><strong data-count="{{ scan.moderate_count }}">{{ scan.moderate_count }}</strong></article>
+        <article class="minor"><span>Minor</span><strong data-count="{{ scan.minor_count }}">{{ scan.minor_count }}</strong></article>
+      </div>
+      <div class="dist" role="img" aria-label="Severity distribution of {{ scan.issue_count }} issues">
+        {% for k,n in [('critical',scan.critical_count),('serious',scan.serious_count),('moderate',scan.moderate_count),('minor',scan.minor_count)] %}<i class="{{ k }}" style="--w:{{ (n*100/total)|round(1) }}%"></i>{% endfor %}
+      </div>
+      <p class="muted" style="margin:.8rem 0 0">{{ scan.issue_count }} total finding{{ 's' if scan.issue_count != 1 }} · scanned in WCAG {{ scan.wcag_level }} mode</p>
     </div>
   </section>
+
   <section class="panel">
-    <div class="section-heading"><div><h2>Principle scores</h2><p class="muted">Higher scores indicate fewer weighted findings.</p></div></div>
-    <div class="principles">
+    <div class="section-heading"><div><h2>WCAG principles</h2><p class="muted">Higher is better. Based on weighted findings.</p></div></div>
+    <div class="principles" style="margin-top:1rem">
       {% for key,label in [('perceivable','Perceivable'),('operable','Operable'),('understandable','Understandable'),('robust','Robust')] %}
-      <div class="principle"><div><span>{{ label }}</span><strong>{{ scan.principle_scores.get(key, 100) }}/100</strong></div><div class="bar"><span style="width:{{ scan.principle_scores.get(key, 100) }}%"></span></div></div>
+      {% set v = scan.principle_scores.get(key, 100) %}{% set pc = 's-ok' if v >= 90 else 's-good' if v >= 75 else 's-warn' if v >= 50 else 's-bad' %}
+      <div class="principle {{ pc }}"><div><span>{{ label }}</span><strong>{{ v }}/100</strong></div><div class="bar"><span style="--w:{{ v }}%"></span></div></div>
       {% endfor %}
     </div>
   </section>
-  {% if scan.screenshot_path %}<section class="panel"><h2>Screenshot with highlighted elements</h2><p class="muted">Red outlines indicate elements associated with detected issues.</p><img class="screenshot" src="{{ scan.screenshot_path }}" alt="Screenshot of the scanned page with failing elements outlined in red"></section>{% endif %}
+
+  {% if scan.screenshot_path %}<section class="panel"><h2>Screenshot with highlighted elements</h2><p class="muted">Red outlines mark elements with detected issues.</p><div class="shot"><img class="screenshot" src="{{ scan.screenshot_path }}" alt="Screenshot of the scanned page with failing elements outlined in red"></div></section>{% endif %}
+
   <section class="panel">
-    <div class="section-heading"><div><h2>Issues <span class="count">{{ issues|length }}</span></h2><p class="muted">Review each finding and suggested correction.</p></div>
-      <div class="exports"><a href="/scan/{{ scan.id }}/export?format=json">JSON</a><a href="/scan/{{ scan.id }}/export?format=csv">CSV</a><a href="/scan/{{ scan.id }}/export?format=pdf">PDF</a></div>
-    </div>
+    <div class="section-heading"><div><h2>Issues <span class="count" id="shown">{{ issues|length }}</span></h2><p class="muted">Tap a finding for the element and how to fix it.</p></div>
+      <div class="exports"><a href="/scan/{{ scan.id }}/export?format=json">JSON</a><a href="/scan/{{ scan.id }}/export?format=csv">CSV</a><a href="/scan/{{ scan.id }}/export?format=pdf">PDF</a></div></div>
     {% if issues %}
-    <div class="table-wrap"><table><caption class="sr-only">Accessibility issues found during this scan</caption><thead><tr><th scope="col">Impact</th><th scope="col">Issue</th><th scope="col">WCAG</th><th scope="col">Element</th><th scope="col">Suggested fix</th></tr></thead><tbody>
+    <div class="tools"><input type="search" id="q" placeholder="Search issues…" aria-label="Search issues">
+      <div role="group" aria-label="Filter by severity">
+      <button type="button" class="chip" data-f="all" aria-pressed="true">All</button>{% for k in ['critical','serious','moderate','minor'] %}<button type="button" class="chip" data-f="{{ k }}" aria-pressed="false">{{ k|capitalize }}</button>{% endfor %}</div></div>
+    <div id="list">
     {% for i in issues %}
-    <tr><td><span class="impact impact-{{ i.impact }}">{{ i.impact|capitalize }}</span></td><td><strong>{{ i.rule_id }}</strong><p>{{ i.message }}</p></td><td>{{ i.wcag_criteria|join(', ') if i.wcag_criteria else '—' }}<small>Level {{ i.wcag_level }}</small></td><td><code>{{ i.selector or '—' }}</code><details><summary>Failing HTML</summary><pre><code>{{ i.html }}</code></pre></details></td><td>{{ i.fix or 'Review the linked WCAG guidance.' }}{% if i.help_url %}<p><a href="{{ i.help_url }}" target="_blank" rel="noreferrer">Learn more</a></p>{% endif %}</td></tr>
-    {% endfor %}
-    </tbody></table></div>
+    <details class="issue {{ i.impact }}" data-impact="{{ i.impact }}" data-text="{{ (i.rule_id ~ ' ' ~ i.message ~ ' ' ~ i.selector)|lower }}">
+      <summary><span class="impact">{{ i.impact }}</span><strong>{{ i.message }}</strong><span class="tag">{{ i.rule_id }}</span>{% if i.wcag_criteria %}<span class="tag">WCAG {{ i.wcag_criteria|join(', ') }} · {{ i.wcag_level }}</span>{% endif %}</summary>
+      <div class="body"><div><b>Element</b><br><code>{{ i.selector or '—' }}</code></div>
+        {% if i.html %}<pre><code>{{ i.html }}</code></pre>{% endif %}
+        <div><b>How to fix</b><p style="white-space:pre-line;margin:.2rem 0">{{ i.fix or 'See the linked guidance.' }}</p>{% if i.help_url %}<a href="{{ i.help_url }}" target="_blank" rel="noreferrer">Learn more ↗</a>{% endif %}</div></div>
+    </details>
+    {% endfor %}</div>
+    <p class="empty" id="none" hidden>No issues match your filter.</p>
+    <script>(function(){var f='all',q=document.getElementById('q'),items=[].slice.call(document.querySelectorAll('.issue')),chips=[].slice.call(document.querySelectorAll('.chip'));
+    function run(){var n=0,s=q.value.toLowerCase();items.forEach(function(e){var ok=(f==='all'||e.dataset.impact===f)&&e.dataset.text.indexOf(s)>-1;e.hidden=!ok;if(ok)n++});document.getElementById('shown').textContent=n;document.getElementById('none').hidden=n>0}
+    chips.forEach(function(c){c.onclick=function(){f=c.dataset.f;chips.forEach(function(x){x.setAttribute('aria-pressed',x===c)});run()}});q.oninput=run})()</script>
     {% else %}<p class="empty">No issues were detected by the checks that ran. This does not guarantee full WCAG conformance.</p>{% endif %}
   </section>
 {% endif %}

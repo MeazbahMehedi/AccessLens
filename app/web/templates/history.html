@@ -1,8 +1,20 @@
 {% extends "base.html" %}
-{% block title %}Scan history · AccessCheck{% endblock %}
+{% block title %}Dashboard · AccessCheck{% endblock %}
 {% block content %}
-<div class="page-heading"><div><p class="eyebrow">YOUR WORKSPACE</p><h1>Scan history</h1><p class="lead">Review recent scans saved in this local instance.</p></div><a class="button" href="/">New scan</a></div>
-<section class="panel"><div class="table-wrap"><table><thead><tr><th scope="col">Website</th><th scope="col">Date</th><th scope="col">Status</th><th scope="col">Score</th><th scope="col">Issues</th><th scope="col">Report</th></tr></thead><tbody>
-{% for scan in scans %}<tr><td><strong>{{ scan.title or scan.url }}</strong><p class="muted">{{ scan.url }}</p></td><td>{{ scan.created_at.strftime('%Y-%m-%d %H:%M UTC') if scan.created_at else '—' }}</td><td>{{ scan.status }}</td><td>{{ scan.score }}/100</td><td>{{ scan.issue_count }}</td><td><a href="/scan/{{ scan.id }}">View results</a></td></tr>{% else %}<tr><td colspan="6">No scans yet. Start your first scan.</td></tr>{% endfor %}
+<div class="page-heading"><div><p class="eyebrow">YOUR WORKSPACE</p><h1>Scan dashboard</h1><p class="lead">Recent scans saved on this machine.</p></div><a class="button" href="/">New scan</a></div>
+<section class="stats stagger" aria-label="Summary">
+  <div class="stat"><strong data-count="{{ stats.total }}">{{ stats.total }}</strong><span>Total scans</span></div>
+  <div class="stat"><strong data-count="{{ stats.avg }}">{{ stats.avg }}</strong><span>Average score</span></div>
+  <div class="stat"><strong data-count="{{ stats.issues }}">{{ stats.issues }}</strong><span>Issues found</span></div>
+  <div class="stat" style="--sc:var(--critical)"><strong style="color:var(--critical)" data-count="{{ stats.critical }}">{{ stats.critical }}</strong><span>Critical issues</span></div>
+</section>
+<section class="panel"><div class="table-wrap"><table><thead><tr><th scope="col">Website</th><th scope="col">Date</th><th scope="col">Status</th><th scope="col">Score</th><th scope="col">Issues</th><th scope="col"><span class="sr-only">Report</span></th></tr></thead><tbody>
+{% for scan in scans %}{% set sc = scan.score or 0 %}{% set cls = 's-ok' if sc >= 90 else 's-good' if sc >= 75 else 's-warn' if sc >= 50 else 's-bad' %}
+<tr><td><strong>{{ scan.title or scan.url }}</strong><p class="muted">{{ scan.url }}</p></td><td>{{ scan.created_at.strftime('%Y-%m-%d %H:%M UTC') if scan.created_at else '—' }}</td>
+<td><span class="st st-{{ scan.status }}">{{ scan.status|capitalize }}</span></td>
+<td>{% if scan.status == 'done' %}<span class="pill {{ cls }}">{{ sc }}/100</span>{% else %}—{% endif %}</td>
+<td>{% if scan.status == 'done' %}{{ scan.issue_count }}{% if scan.critical_count %} <span class="impact critical">{{ scan.critical_count }} critical</span>{% endif %}{% else %}—{% endif %}</td>
+<td><a href="/scan/{{ scan.id }}">View</a></td></tr>
+{% else %}<tr><td colspan="6">No scans yet. <a href="/">Start your first scan.</a></td></tr>{% endfor %}
 </tbody></table></div></section>
 {% endblock %}

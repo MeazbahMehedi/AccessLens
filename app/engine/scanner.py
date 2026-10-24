@@ -2,6 +2,7 @@
 """Browser scanner. Kept independent of FastAPI and database code."""
 
 import asyncio
+import sys
 import time
 from dataclasses import dataclass, asdict
 from pathlib import Path
@@ -34,6 +35,20 @@ class PageResult:
     load_time_ms: int
     findings: list[Finding]
     screenshot_path: str | None = None
+    notes: list[str] | None = None
+
+
+LEVELS = {"A": {"A"}, "AA": {"A", "AA"}, "AAA": {"A", "AA", "AAA"}}
+# custom checks that axe-core already performs better
+AXE_OVERLAP = {"image-alt", "link-name", "page-title", "page-lang",
+               "heading-h1", "main-landmark", "form-label", "target-size"}
+
+
+def _level(tags: list[str]) -> str:
+    wc = [t for t in tags if t.startswith("wcag")]
+    if any(t.endswith("aaa") for t in wc): return "AAA"
+    if any(t.endswith("aa") for t in wc): return "AA"
+    return "A"
 
 
 def _safe_target(url: str):
@@ -61,12 +76,14 @@ def _detect_challenge(title: str, page_text: str) -> bool:
 
 
 async def scan_page(
-    url: str, screenshot_path: str | None = None
+    url: str, screenshot_path: str | None = None, wcag_level: str = "AA"
 ) -> PageResult:
-    _safe_target(url)
+    await asyncio.to_thread(_safe_target, url)  # DNS lookups block; keep them off the loop
 
     start = time.monotonic()
     findings: list[Finding] = []
+    notes: list[str] = []
+    axe_ran = False
 
     async with async_playwright() as p:
         browser = await p.chromium.launch(
@@ -85,8 +102,15 @@ async def scan_page(
                 timeout=settings.scan_timeout_seconds * 1000,
             )
 
+            # let JS-rendered content settle (best effort, never fatal)
+            for state in ("load", "networkidle"):
+                try:
+                    await page.wait_for_load_state(state, timeout=6000)
+                except Exception:
+                    break
+
             final_url = page.url
-            _safe_target(final_url)
+            await asyncio.to_thread(_safe_target, final_url)
 
             title = await page.title()
             page_text = ""
@@ -110,7 +134,12 @@ async def scan_page(
 
             axe_path = Path(settings.axe_js_path)
 
-            if axe_path.exists():
+            axe = {}
+            if not axe_path.exists():
+                notes.append("axe-core is not installed, so only basic checks ran. "
+                             "Run: python scripts/fetch_axe.py")
+            else:
+              try:
                 await page.add_script_tag(path=str(axe_path))
                 axe = await page.evaluate(
                     """async () =>
@@ -119,9 +148,15 @@ async def scan_page(
                         })
                     """
                 )
+                axe_ran = True
+              except Exception as exc:
+                notes.append(f"axe-core could not run on this page ({type(exc).__name__}); basic checks only.")
 
+            if True:
                 for violation in axe.get("violations", []):
                     tags = violation.get("tags", [])
+                    if _level(tags) not in LEVELS.get(wcag_level, LEVELS["AA"]):
+                        continue
                     criteria = []
 
                     for tag in tags:
@@ -163,19 +198,34 @@ async def scan_page(
                                 html=node.get("html", ""),
                                 wcag_criteria=criteria,
                                 principle=principle,
-                                wcag_level=(
-                                    "AA"
-                                    if any("aa" in x for x in tags)
-                                    else "A"
-                                ),
+                                wcag_level=_level(tags),
                                 help_url=violation.get("helpUrl", ""),
                                 source="axe",
+                                fix=(node.get("failureSummary") or "").strip(),
                             )
                         )
 
             custom = await page.evaluate(
                 """() => {
                     const out = [];
+
+                    const cssPath = el => {
+                        if (el.id) return '#' + CSS.escape(el.id);
+                        const parts = [];
+                        while (el && el.nodeType === 1
+                               && el !== document.documentElement) {
+                            let part = el.tagName.toLowerCase();
+                            const same = el.parentElement
+                                ? [...el.parentElement.children]
+                                    .filter(c => c.tagName === el.tagName)
+                                : [];
+                            if (same.length > 1)
+                                part += ':nth-of-type(' + (same.indexOf(el) + 1) + ')';
+                            parts.unshift(part);
+                            el = el.parentElement;
+                        }
+                        return parts.length ? 'html > ' + parts.join(' > ') : 'html';
+                    };
 
                     const add = (
                         rule, impact, message, el,
@@ -184,11 +234,7 @@ async def scan_page(
                         rule_id: rule,
                         impact,
                         message,
-                        selector: el
-                            ? (el.id
-                                ? '#' + CSS.escape(el.id)
-                                : el.tagName.toLowerCase())
-                            : 'html',
+                        selector: el ? cssPath(el) : 'html',
                         html: el ? el.outerHTML.slice(0, 500) : '',
                         wcag_criteria: wcag,
                         principle,
@@ -245,7 +291,7 @@ async def scan_page(
                     }
 
                     for (const el of document.querySelectorAll(
-                        'input:not([type=hidden]),select,textarea'
+                        'input:not([type=hidden]):not([type=submit]):not([type=button]):not([type=reset]):not([type=image]),select,textarea'
                     )) {
                         if (
                             !el.labels?.length &&
@@ -266,6 +312,10 @@ async def scan_page(
                         const text = (
                             el.innerText ||
                             el.getAttribute('aria-label') ||
+                            el.getAttribute('aria-labelledby') && 'x' ||
+                            el.getAttribute('title') ||
+                            el.querySelector('img[alt]:not([alt=""])')?.alt ||
+                            el.querySelector('svg title')?.textContent ||
                             ''
                         ).trim().toLowerCase();
 
@@ -327,6 +377,8 @@ async def scan_page(
             }
 
             for item in custom:
+                if axe_ran and item["rule_id"] in AXE_OVERLAP:
+                    continue
                 key = (item["rule_id"], item["selector"])
                 if key not in existing:
                     findings.append(Finding(**item))
@@ -341,8 +393,8 @@ async def scan_page(
                     finding.selector
                     for finding in findings
                     if finding.selector
-                    and not finding.selector.startswith("html")
-                ]
+                    and finding.selector != "html"
+                ][:300]
 
                 await page.evaluate(
                     """(selectors) => {
@@ -371,6 +423,7 @@ async def scan_page(
                 load_ms,
                 findings,
                 screenshot_path,
+                notes,
             )
 
         except Exception as exc:
@@ -385,10 +438,25 @@ async def scan_page(
             await browser.close()
 
 
+def _run_in_own_loop(url, shot, level):
+    """Playwright launches a subprocess; on Windows that needs a Proactor loop,
+    which uvicorn (esp. with --reload) does not provide. Use our own."""
+    loop = (asyncio.ProactorEventLoop() if sys.platform == "win32"
+            else asyncio.new_event_loop())
+    try:
+        return loop.run_until_complete(scan_page(url, shot, level))
+    finally:
+        loop.close()
+
+
+async def scan_page_isolated(url, screenshot_path=None, wcag_level="AA"):
+    return await asyncio.to_thread(_run_in_own_loop, url, screenshot_path, wcag_level)
+
+
 def run_scan(
     url: str, screenshot_path: str | None = None
 ) -> PageResult:
-    return asyncio.run(scan_page(url, screenshot_path))
+    return _run_in_own_loop(url, screenshot_path, "AA")
 
 
 def finding_dict(finding: Finding) -> dict:

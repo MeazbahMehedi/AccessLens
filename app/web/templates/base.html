@@ -3,17 +3,24 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="color-scheme" content="light dark">
   <title>{% block title %}AccessCheck{% endblock %}</title>
+  <script>try{var t=localStorage.getItem('ac-theme');if(t)document.documentElement.dataset.theme=t}catch(e){}</script>
   <link rel="stylesheet" href="/static/css/app.css">
+  {% block head %}{% endblock %}
 </head>
 <body>
 <a class="skip-link" href="#main">Skip to main content</a>
 <header class="topbar">
-  <a class="brand" href="/">AccessCheck<span aria-hidden="true">.</span></a>
-  <nav aria-label="Main navigation"><a href="/">New scan</a><a href="/history">History</a><a href="/docs">API docs</a></nav>
+  <a class="brand" href="/"><i aria-hidden="true"></i>AccessCheck</a>
+  <nav aria-label="Main navigation"><a href="/">New scan</a><a href="/history">Dashboard</a><a href="/docs">API</a>
+    <button id="theme" type="button" aria-label="Toggle dark mode">◐</button></nav>
 </header>
 <main id="main" tabindex="-1">{% block content %}{% endblock %}</main>
 <footer><p>AccessCheck checks common accessibility patterns. Results are automated guidance, not a compliance certification.</p></footer>
+<script>
+document.getElementById('theme').onclick=function(){var d=document.documentElement,dark=d.dataset.theme?d.dataset.theme==='dark':matchMedia('(prefers-color-scheme:dark)').matches,n=dark?'light':'dark';d.dataset.theme=n;try{localStorage.setItem('ac-theme',n)}catch(e){}};
+document.querySelectorAll('[data-count]').forEach(function(el){var to=+el.dataset.count,t0=performance.now();(function f(t){var p=Math.min((t-t0)/900,1);el.textContent=Math.round(to*(1-Math.pow(1-p,3)));if(p<1)requestAnimationFrame(f)})(t0)});
+document.querySelectorAll('.stagger > *').forEach(function(el,i){el.style.animationDelay=(i*70)+'ms'});
+</script>
 </body>
 </html>

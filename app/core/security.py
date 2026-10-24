@@ -1,3 +1,4 @@
+import socket
 import ssl
 import certifi
 import ipaddress
@@ -42,11 +43,9 @@ def _resolve_public_addresses(hostname: str) -> list:
             ) as response:
 
                 result = json.loads(response.read().decode("utf-8"))
-        except (URLError, TimeoutError, OSError, ValueError) as exc:
-            raise UnsafeURLError(
-                "Could not verify the public DNS records. "
-                "Check DNS-over-HTTPS connectivity and try again."
-            ) from exc
+        except (URLError, TimeoutError, OSError, ValueError):
+            # DoH blocked (firewall/school/VPN)? Fall back to the OS resolver.
+            return _resolve_system(hostname)
 
         if result.get("Status") not in (0, 3):
             raise UnsafeURLError(
@@ -68,6 +67,23 @@ def _resolve_public_addresses(hostname: str) -> list:
         )
 
     return addresses
+
+
+def _resolve_system(hostname: str) -> list:
+    """Fallback resolver. Every returned address is still checked as public."""
+    try:
+        infos = socket.getaddrinfo(hostname, None, proto=socket.IPPROTO_TCP)
+    except socket.gaierror as exc:
+        raise UnsafeURLError(f"Could not resolve {hostname}. Check the address.") from exc
+    return [ipaddress.ip_address(i[4][0].split("%")[0]) for i in infos]
+
+
+def normalize_url(raw: str) -> str:
+    """Accept 'example.com' by adding https:// when no scheme was typed."""
+    raw = (raw or "").strip()
+    if raw and "://" not in raw:
+        raw = "https://" + raw
+    return raw
 
 
 def validate_public_url(url: str) -> str:
