@@ -12,7 +12,7 @@ from app.core import security
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Check AccessCheck public-URL and VPN/proxy DNS verification."
+        description="Check AccessLens public-URL and VPN/proxy DNS verification."
     )
     parser.add_argument("url", help="A website URL or hostname, for example jwxt.zzu.edu.cn")
     parser.add_argument(

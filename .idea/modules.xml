@@ -2,7 +2,7 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/.idea/accesscheck.iml" filepath="$PROJECT_DIR$/.idea/accesscheck.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/AccessLens.iml" filepath="$PROJECT_DIR$/.idea/AccessLens.iml" />
     </modules>
   </component>
 </project>

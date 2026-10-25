@@ -38,7 +38,7 @@ def test_dual_stack_vpn_scan_redirect_resources_persistence_and_exports(monkeypa
             self.send_header("Content-Type", "text/html; charset=utf-8")
             self.end_headers()
             self.wfile.write(
-                f"""<!doctype html><html lang="en"><head><title>VPN workflow fixture</title><link rel="stylesheet" href="http://static.accesscheck.test/style.css"></head><body><main><h1>Controlled accessibility audit</h1><button></button><p>Public hostname preserved through redirects.</p></main></body></html>""".encode()
+                f"""<!doctype html><html lang="en"><head><title>VPN workflow fixture</title><link rel="stylesheet" href="http://static.accesslens.test/style.css"></head><body><main><h1>Controlled accessibility audit</h1><button></button><p>Public hostname preserved through redirects.</p></main></body></html>""".encode()
             )
 
         def log_message(self, *args):
@@ -107,7 +107,7 @@ def test_dual_stack_vpn_scan_redirect_resources_persistence_and_exports(monkeypa
                 assert download.status_code == 200, (fmt, download.text[:200])
                 assert download.content.startswith(signature), fmt
             assert any(
-                host == "static.accesscheck.test" and path == "/style.css" for host, path in hits
+                host == "static.accesslens.test" and path == "/style.css" for host, path in hits
             )
     finally:
         server.shutdown()

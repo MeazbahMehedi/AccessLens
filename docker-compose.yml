@@ -4,11 +4,11 @@ services:
     ports:
       - "127.0.0.1:8000:8000"
     environment:
-      DATABASE_URL: sqlite+aiosqlite:////data/accesscheck.db
+      DATABASE_URL: sqlite+aiosqlite:////data/accesslens.db
       SCREENSHOT_DIR: /data/screenshots
     volumes:
-      - accesscheck-data:/data
+      - accesslens-data:/data
     init: true
     shm_size: 512mb
 volumes:
-  accesscheck-data:
+  accesslens-data:

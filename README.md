@@ -1,6 +1,8 @@
 <div align="center">
 
-# AccessCheck
+<img src="app/web/static/accesslens-logo.svg" width="80" alt="AccessLens logo">
+
+# AccessLens
 
 ### Understand accessibility. Inspect the evidence. Share a plan.
 
@@ -14,13 +16,36 @@ A local-first website accessibility scanner with a multi-page dashboard, WCAG fi
 
 ---
 
-## What is AccessCheck?
+## What is AccessLens?
 
-AccessCheck helps developers, students and small teams identify common accessibility barriers in a web page. Enter a public URL, let a real Chromium browser render it, and explore findings with the affected HTML, WCAG criteria, severity and suggested fixes.
+AccessLens helps developers, students and small teams identify common accessibility barriers in a web page. Enter a public URL, let a real Chromium browser render it, and explore findings with the affected HTML, WCAG criteria, severity and suggested fixes.
 
 The application saves scan history locally, summarizes results in charts, and produces reports for development work, coursework or team review. A dedicated About page explains the method, and a Developer page displays live public GitHub information.
 
-AccessCheck evaluates **one page at one desktop viewport and one captured state**. It does not certify WCAG conformance. Automated evidence should be reviewed alongside keyboard, screen reader and task-based testing.
+AccessLens evaluates **one page at one desktop viewport and one captured state**. It does not certify WCAG conformance. Automated evidence should be reviewed alongside keyboard, screen reader and task-based testing.
+
+## Why use AccessLens?
+
+AccessLens brings page rendering, automated findings, screenshots, saved history and report exports into one local workspace. It helps you turn an accessibility finding into a reviewable task: inspect the affected element, read the criterion and suggested fix, and share the evidence. Bundled browser checks and transparent scoring also make it suitable for repeatable coursework demonstrations.
+
+## Core programming and technologies
+
+**Python is the core programming language.** JavaScript runs the in-browser accessibility checks and the dashboard interactions. The project does not use an AI model or an LLM API.
+
+| Layer | Technology | Responsibility |
+| --- | --- | --- |
+| Web application | Python, FastAPI, Jinja2, Uvicorn | Routes, forms, server-rendered pages, background scan tasks and downloads |
+| Browser scanning | Playwright, Chromium, JavaScript | Render one target page, evaluate its captured state and save screenshot evidence |
+| Accessibility checks | Bundled axe-core and basic-check JavaScript | Supported automated WCAG rules, review items and best practices |
+| Scoring | Python | Severity-weighted, rule-capped prioritization and principle scores |
+| Persistence | SQLAlchemy, aiosqlite, SQLite | Scan history, findings, result metadata and status |
+| Reports | ReportLab, python-docx, Python CSV/JSON | PDF, DOCX, legacy DOC/RTF, CSV and JSON exports |
+| Interface | HTML, local CSS, JavaScript, SVG | Existing dashboard, charts, filtering, navigation, themes and new logo |
+| Integrations | HTTPX, GitHub REST API | Read-only public developer information and repositories |
+| CLI and configuration | Typer, Pydantic Settings | Command-line scanning, environment variables and `.env` configuration |
+| Verification | pytest, pytest-asyncio, Playwright | URL/network checks, browser fixtures, scoring, persistence, routes and exports |
+
+The architecture is a **modular monolith**: one Python application serves the interface and coordinates bounded browser jobs, while separate modules handle target validation, scanning, persistence, scoring and reports. The CLI reuses the same scanner.
 
 ## Main capabilities
 
@@ -93,12 +118,20 @@ python -m playwright install --with-deps chromium
 
 Open **http://127.0.0.1:8000**. Use one server worker; the scan queue and GitHub cache live in that process.
 
+### Project rename and existing workspaces
+
+The project is now **AccessLens**. The ZIP and root folder are `AccessLens`, the installed project/CLI name is `accesslens`, and report downloads use the `accesslens-` prefix. The server command remains `python -m uvicorn app.main:app --reload`. Scanner behavior, WCAG rules, scoring, public-target restrictions, networking support, pages and developer identity are retained.
+
+Stop the old server and back up its database, `.env` and screenshot directory. Copy those files into the new project root before starting, preserving any custom screenshot paths. New installations use `accesslens.db`. Without an explicit `DATABASE_URL`, an existing `accesscheck.db` is opened in place if `accesslens.db` does not exist. An existing `.env` with `DATABASE_URL` continues to select that database. Do not overwrite that `.env` with the new example when upgrading.
+
+The CLI is now `accesslens`; reinstall the project from the new folder to register the renamed command. Existing browser theme choices are retained. Docker users must explicitly reconnect their existing volume when changing the Compose project/folder name and keep `DATABASE_URL` pointed at the database filename inside that volume; the newly named default volume starts a fresh workspace.
+
 ### Keeping an existing workspace
 
 For this release, stop the old server with **Ctrl+C**, replace the application source, reinstall using the same virtual-environment Python, and start the server from the updated project directory. Open `http://127.0.0.1:8000/health` and confirm version **2.0.2**; a different version means an older server or project folder is still running.
 
 
-Back up and retain your `accesscheck.db`, `.env` and screenshot directory before replacing application files. Reinstall the project dependencies, then restart the server. Supported SQLite schema additions are applied automatically. Existing legacy scans remain available; rerun them to obtain the current engine's findings and scoring.
+Back up and retain your database (`accesslens.db`, or the existing `accesscheck.db`), `.env` and screenshot directory before replacing application files. Reinstall the project dependencies, then restart the server. Supported SQLite schema additions are applied automatically. Existing legacy scans remain available; rerun them to obtain the current engine's findings and scoring.
 
 A distributed source ZIP does not include another installation's database, screenshots, virtual environment or private `.env`. A fresh workspace creates its database on startup.
 
@@ -131,41 +164,6 @@ Scans run as background tasks, with up to two active browser jobs at once and a 
 
 The application opens the page without signing in, submitting forms, accepting consent or solving verification challenges. Its screenshot and findings reflect that visitor state.
 
-## Core programming and architecture
-
-**Python is the main programming language.** It coordinates URL validation, DNS verification, scan jobs, browser automation, database operations, scoring, GitHub retrieval and exports. JavaScript evaluates browser-side checks and powers charts, filtering, polling and theme controls. HTML with Jinja2 defines the pages; CSS defines presentation; SQL is accessed through SQLAlchemy for local SQLite persistence.
-
-AccessCheck uses a **layered modular monolith**: one deployable FastAPI application, organized into presentation, application, scanning, service and persistence modules. Chromium is a separate process controlled by Playwright. Background work uses in-process asyncio tasks and a semaphore; it is not a Celery/Redis worker architecture. Installed packages in a virtual environment do not establish which components the program actually uses.
-
-```mermaid
-flowchart TD
-    UI["Browser interface"] --> WEB["FastAPI routes and scan jobs"]
-    WEB --> ENGINE["Playwright scan engine"]
-    WEB --> DB["SQLAlchemy and SQLite"]
-    WEB --> REPORT["Report generation services"]
-    WEB --> GH["Public GitHub service"]
-    ENGINE --> PAGE["Chromium rendered website"]
-    PAGE --> AXE["axe-core and basic JavaScript checks"]
-    AXE --> ENGINE
-    ENGINE --> WEB
-    REPORT --> FILE["PDF Word CSV JSON downloads"]
-```
-
-| Source module | Core programming responsibility |
-| --- | --- |
-| `app/main.py` | FastAPI endpoints, background job creation, status transitions and persistence |
-| `app/core/security.py` | URL normalization, public-address checks and dual-stack DNS verification |
-| `app/core/network.py` | Browser proxy selection and actionable connection failures |
-| `app/engine/scanner.py` | Chromium rendering, request/redirect checks, axe execution and screenshot capture |
-| `app/engine/checks.js` | Conservative DOM checks when axe-core cannot run |
-| `app/services/scoring.py` | Rule-based severity penalties and principle scores |
-| `app/services/report_service.py` | PDF, DOCX, DOC/RTF, CSV and JSON generation |
-| `app/services/github_service.py` | Fixed public developer account, repository pagination and caching |
-| `app/db.py` | Scan model, asynchronous sessions and compatible SQLite initialization |
-| `cli/main.py` | Terminal interface using the same scanner and scoring logic |
-
-The detection engine is deterministic and rule-based. AccessCheck does not train an AI model, use an LLM to decide findings, or require a GPU. Its purpose is accessibility analysis, not penetration testing or malware detection.
-
 ## Understanding the findings
 
 | Result category | Meaning | Reduces the score? |
@@ -180,7 +178,7 @@ A major website can have accessibility barriers. The exact output also depends o
 
 ### Scores
 
-AccessCheck uses a transparent prioritization heuristic:
+AccessLens uses a transparent prioritization heuristic:
 
 ```text
 rule penalty = highest severity weight × (1 + 0.25 × (min(occurrences, 5) − 1))
@@ -224,9 +222,9 @@ CSV uses a UTF-8 BOM for spreadsheet compatibility and protects text cells again
 
 ## Network and VPN/proxy compatibility
 
-AccessCheck accepts **public websites** and rejects local, private, link-local, multicast and reserved IP destinations.
+AccessLens accepts **public websites** and rejects local, private, link-local, multicast and reserved IP destinations.
 
-Some VPN/proxy DNS systems assign synthetic IPv4 addresses in `198.18.0.0/15` (such as `198.18.0.56`) and synthetic IPv6 addresses in `2001:2::/48` (such as `2001:2::d`) to ordinary public hostnames. AccessCheck recognizes either family, including mixed A/AAAA answers. Those local DNS substitutions alone do not establish that the named website is private.
+Some VPN/proxy DNS systems assign synthetic IPv4 addresses in `198.18.0.0/15` (such as `198.18.0.56`) and synthetic IPv6 addresses in `2001:2::/48` (such as `2001:2::d`) to ordinary public hostnames. AccessLens recognizes either family, including mixed A/AAAA answers. Those local DNS substitutions alone do not establish that the named website is private.
 
 The default validation process is:
 
@@ -281,7 +279,7 @@ Optional settings are loaded from `.env`. New installations can copy `.env.examp
 
 | Setting | Default | Purpose |
 | --- | --- | --- |
-| `DATABASE_URL` | `sqlite+aiosqlite:///./accesscheck.db` | Local scan database |
+| `DATABASE_URL` | `sqlite+aiosqlite:///./accesslens.db` on a fresh installation | Local scan database; legacy filename fallback is described above |
 | `SCAN_TIMEOUT_SECONDS` | `45` | Initial navigation timeout; valid range 10–180 seconds |
 | `DNS_PUBLIC_FALLBACK` | `true` | Verify public hostnames when DNS is synthetic or unavailable |
 | `DNS_HTTPS_TIMEOUT_SECONDS` | `8` | HTTPS-DNS timeout per request; valid range 1–15 seconds |
@@ -307,9 +305,9 @@ The service retrieves paginated repository data, supports search/sort in the int
 After installing the project:
 
 ```bash
-accesscheck https://example.com --fail-under 80
-accesscheck https://example.com --output json
-accesscheck --help
+accesslens https://example.com --fail-under 80
+accesslens https://example.com --output json
+accesslens --help
 ```
 
 The CLI uses the same scan engine and URL validation. Text output includes coverage notes, findings and review counts. JSON includes structured results. Exit codes are **0** for a completed scan meeting the threshold, **1** for a score below the threshold, and **2** for an invalid option or scan error.
@@ -320,7 +318,7 @@ The CLI uses the same scan engine and URL validation. Text output includes cover
 docker compose up --build
 ```
 
-Open http://127.0.0.1:8000. The Compose configuration uses one application container and an `accesscheck-data` volume for SQLite and screenshots. Its published port is bound to localhost. Internet access is required to download images, packages and Chromium, and to reach scanned sites.
+Open http://127.0.0.1:8000. The Compose configuration uses one application container and an `accesslens-data` volume for SQLite and screenshots. Its published port is bound to localhost. Internet access is required to download images, packages and Chromium, and to reach scanned sites.
 
 ## Troubleshooting
 
@@ -352,70 +350,35 @@ Regression tests reproduce the reported `198.18.0.56` and `2001:2::…` cases fo
 ## Project layout
 
 ```text
-AccessCheck/
+AccessLens/
 ├── app/
-│   ├── main.py
-│   ├── db.py
-│   ├── core/
-│   │   ├── config.py
-│   │   ├── security.py
-│   │   └── network.py
-│   ├── engine/
-│   │   ├── scanner.py
-│   │   ├── checks.js
-│   │   └── vendor/
-│   │       ├── axe.min.js
-│   │       └── AXE-LICENSE.txt
-│   ├── services/
-│   │   ├── scoring.py
-│   │   ├── report_service.py
-│   │   └── github_service.py
-│   └── web/
-│       ├── templates/
-│       │   ├── base.html
-│       │   ├── dashboard.html
-│       │   ├── home.html
-│       │   ├── history.html
-│       │   ├── results.html
-│       │   ├── reports.html
-│       │   ├── developer.html
-│       │   ├── about.html
-│       │   ├── macros.html
-│       │   └── 404.html
-│       └── static/
-│           ├── brand.svg
-│           ├── css/app.css
-│           ├── js/
-│           │   ├── app.js
-│           │   ├── charts.js
-│           │   └── developer.js
-│           └── screenshots/       # Generated at runtime
-├── cli/main.py
+│   ├── core/                 # Configuration and public/DNS target verification
+│   ├── engine/               # Browser scanner, basic checks and local axe-core
+│   ├── services/             # Scoring, reports and GitHub public data
+│   ├── web/
+│   │   ├── static/           # CSS, JavaScript, icons and runtime screenshots
+│   │   └── templates/        # Dedicated workspace pages
+│   ├── db.py                 # SQLite models and compatible initialization
+│   └── main.py               # Application routes and job lifecycle
+├── cli/                      # Command-line scanner
+├── docs/                     # Architecture, method, usage and validation
 ├── scripts/
-│   ├── check_network.py
-│   └── fetch_axe.py
-├── docs/                          # Architecture, rules, usage and validation
-├── tests/                         # Unit, route and browser workflow tests
-│   └── fixtures/
+│   ├── check_network.py      # URL/DNS diagnostic command
+│   └── fetch_axe.py          # Restore the pinned engine and upstream license
+├── tests/                    # Regression and browser-fixture tests
+├── README.md / START_HERE.md / CHANGELOG.md
 ├── .env.example
-├── .gitignore
-├── .dockerignore
 ├── Dockerfile
 ├── docker-compose.yml
-├── pyproject.toml
-├── README.md
-├── START_HERE.md
-├── CHANGELOG.md
-└── LICENSE
+├── LICENSE
+└── pyproject.toml
 ```
-
-The source tree omits empty package initializer files for readability. Keep `.venv/`, IDE settings, `__pycache__/`, `*.egg-info/`, private `.env` files, databases and generated screenshots out of GitHub. A local Windows `tree` listing can include these installation files; they are not the application architecture. Use `.gitignore` and upload the clean project source.
 
 ## Privacy and deployment scope
 
 Scan records and screenshots remain in the configured local database/directories. The application accesses the requested website and its resources. External connections also include GitHub profile/repository data and avatars, and HTTPS DNS when fallback is needed. The bundled engine and local UI assets do not require a runtime CDN.
 
-AccessCheck is a **single-user local workspace** with shared local history. It has no authentication, ownership boundaries, distributed queue, scheduler or site-wide crawler. Keep the development server bound to localhost.
+AccessLens is a **single-user local workspace** with shared local history. It has no authentication, ownership boundaries, distributed queue, scheduler or site-wide crawler. Keep the development server bound to localhost.
 
 URL checks, browser request routing, Chromium redirect interception, blocked service workers and blocked WebSockets provide defense in depth. DNS checks do not pin the actual browser connection to a verified address, and a VPN/proxy controls its own routing. These checks are not a complete SSRF or browser-isolation boundary. Public deployment needs authentication, rate limits, browser sandboxing and enforced outbound-network policy. The current Chromium launch uses `--no-sandbox` for container compatibility.
 
@@ -440,7 +403,7 @@ The project includes axe-core **4.10.3**. Restore that pinned bundle and its lic
 
 Focused improvements and reproducible bug reports are welcome. Describe the expected behavior, include a safe example or controlled fixture, and run the test suite. Keep automated failures separate from inconclusive checks and recommendations. Do not include credentials, private scan data, a virtual environment or runtime screenshots in a contribution.
 
-If AccessCheck is useful to your work, a GitHub star helps others discover it.
+If AccessLens is useful to your work, a GitHub star helps others discover it.
 
 ## License
 

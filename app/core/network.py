@@ -87,7 +87,7 @@ def connection_failure(exc):
     text = str(exc)
     if "ERR_CERT" in text or "SSL" in text:
         return ScanFailure(
-            "The website's HTTPS certificate could not be verified. Check the website certificate and your VPN/system trust configuration. AccessCheck does not disable certificate checks.",
+            "The website's HTTPS certificate could not be verified. Check the website certificate and your VPN/system trust configuration. AccessLens does not disable certificate checks.",
             "certificate_error",
             "connection",
         )

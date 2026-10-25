@@ -54,3 +54,12 @@
 - Simplified Docker to match the real application architecture.
 - Updated README, usage, architecture, rules and validation documentation.
 - Added rendered-fixture, export, route, scoring, security and GitHub regression tests.
+# AccessLens branding update — 25 October 2026
+
+- Renamed the app, root folder, installed CLI, report labels and download filenames to AccessLens.
+- Added a new accessibility-lens SVG logo across the sidebar, About page, favicon and README.
+- Updated the full README with core technologies, architecture, purpose, workflow and workspace-migration guidance.
+- Preserved scanner, WCAG checks, scoring, network/VPN/DNS handling, page layout, developer identity, dependencies and vendor license.
+- Kept existing database and browser-theme compatibility; documented Docker volume reuse when changing project names.
+- Verified 141 tests, CLI help, desktop/mobile browser pages in both themes, five export formats and report branding.
+

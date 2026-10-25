@@ -36,7 +36,7 @@ async def developer_data():
                     timeout=10,
                     headers={
                         "Accept": "application/vnd.github+json",
-                        "User-Agent": "AccessCheck/2.0",
+                        "User-Agent": "AccessLens/2.0",
                         "X-GitHub-Api-Version": "2022-11-28",
                     },
                 ) as client,

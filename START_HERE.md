@@ -1,6 +1,6 @@
 # Start the fixed version
 
-This package is AccessCheck **2.0.2**. It recognizes the reported VPN synthetic IPv4 and IPv6 addresses, including `2001:2::d`, `2001:2::6` and `2001:2::e`.
+This package is AccessLens **2.0.2**. It recognizes the reported VPN synthetic IPv4 and IPv6 addresses, including `2001:2::d`, `2001:2::6` and `2001:2::e`.
 
 1. Stop the previous server with **Ctrl+C**.
 2. Extract this ZIP into a fresh folder. Keep a backup of your previous database, screenshots and `.env` if you need your history.

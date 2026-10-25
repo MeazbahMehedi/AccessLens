@@ -5,7 +5,7 @@ from app.core.security import normalize_url
 from app.engine.scanner import scan_page, finding_dict
 from app.services.scoring import calculate_score
 
-app = typer.Typer(help="AccessCheck command-line accessibility scanner")
+app = typer.Typer(help="AccessLens command-line accessibility scanner")
 
 
 @app.command()
@@ -37,7 +37,7 @@ def scan(url: str, fail_under: int = typer.Option(80, min=0, max=100), output: s
         )
     else:
         typer.echo(
-            f"AccessCheck: {result.url}\nHeuristic score: {score}/100  Findings: {len(issues)}\nCoverage: {result.metadata.get('coverage', 'unknown')}"
+            f"AccessLens: {result.url}\nHeuristic score: {score}/100  Findings: {len(issues)}\nCoverage: {result.metadata.get('coverage', 'unknown')}"
         )
         for note in result.notes:
             typer.echo(f"Note: {note}")

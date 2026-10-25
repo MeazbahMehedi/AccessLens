@@ -2,7 +2,7 @@ import os
 import tempfile
 from pathlib import Path
 
-_temp = Path(tempfile.mkdtemp(prefix="accesscheck-tests-"))
+_temp = Path(tempfile.mkdtemp(prefix="accesslens-tests-"))
 os.environ["DATABASE_URL"] = f"sqlite+aiosqlite:///{_temp / 'test.db'}"
 os.environ["SCREENSHOT_DIR"] = str(_temp / "screenshots")
 

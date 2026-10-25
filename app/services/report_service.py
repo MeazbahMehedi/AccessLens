@@ -131,10 +131,10 @@ def pdf_export(scan):
         "/System/Library/Fonts/Supplemental/Arial.ttf",
     ):
         if Path(path).is_file():
-            if "AccessCheckUnicode" not in pdfmetrics.getRegisteredFontNames():
-                pdfmetrics.registerFont(TTFont("AccessCheckUnicode", path))
+            if "AccessLensUnicode" not in pdfmetrics.getRegisteredFontNames():
+                pdfmetrics.registerFont(TTFont("AccessLensUnicode", path))
             for name in ("Normal", "BodyText", "Title", "Heading1", "Heading2", "Heading3"):
-                styles[name].fontName = "AccessCheckUnicode"
+                styles[name].fontName = "AccessLensUnicode"
             break
     styles.add(
         ParagraphStyle(
@@ -152,7 +152,7 @@ def pdf_export(scan):
 
     d, rows = _sections(scan)
     story = [
-        para("AccessCheck", "Title"),
+        para("AccessLens", "Title"),
         para("Website accessibility report", "Heading2"),
         Spacer(1, 12),
     ]
@@ -187,7 +187,7 @@ def pdf_export(scan):
         canvas.saveState()
         canvas.setFont("Helvetica", 8)
         canvas.setFillColor(colors.HexColor("#586078"))
-        canvas.drawString(42, 25, "AccessCheck • Automated accessibility report")
+        canvas.drawString(42, 25, "AccessLens • Automated accessibility report")
         canvas.drawRightString(553, 25, str(doc.page))
         canvas.restoreState()
 
@@ -198,7 +198,7 @@ def pdf_export(scan):
         leftMargin=42,
         topMargin=42,
         bottomMargin=44,
-        title="AccessCheck Report",
+        title="AccessLens Report",
     ).build(story, onFirstPage=footer, onLaterPages=footer)
     return output.getvalue()
 
@@ -209,7 +209,7 @@ def docx_export(scan):
 
     doc = Document()
     sec = doc.sections[0]
-    sec.header.paragraphs[0].text = "ACCESSCHECK  /  ACCESSIBILITY REPORT"
+    sec.header.paragraphs[0].text = "ACCESSLENS  /  ACCESSIBILITY REPORT"
     doc.styles["Normal"].font.name = "Calibri"
     doc.styles["Normal"].font.size = Pt(10)
     doc.add_heading("Website accessibility report", 0)
@@ -269,7 +269,7 @@ def doc_export(scan):
 
     d, rows = _sections(scan)
     lines = (
-        ["AccessCheck — Website accessibility report"]
+        ["AccessLens — Website accessibility report"]
         + [f"{k}: {v}" for k, v in rows]
         + [DISCLAIMER]
     )

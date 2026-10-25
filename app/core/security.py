@@ -124,7 +124,7 @@ def _resolve_public_dns(hostname):
                     timeout=settings.dns_https_timeout_seconds,
                     **httpx_proxy_options(),
                     follow_redirects=False,
-                    headers={"Accept": "application/dns-json", "User-Agent": "AccessCheck/2.0.2"},
+                    headers={"Accept": "application/dns-json", "User-Agent": "AccessLens/2.0.2"},
                 ) as client,
                 ThreadPoolExecutor(max_workers=2) as pool,
             ):

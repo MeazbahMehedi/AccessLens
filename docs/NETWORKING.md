@@ -1,6 +1,6 @@
 # Website access and VPN support
 
-AccessCheck scans public HTTP/HTTPS pages. Website address eligibility and the browser's ability to load content are separate steps, and both are checked.
+AccessLens scans public HTTP/HTTPS pages. Website address eligibility and the browser's ability to load content are separate steps, and both are checked.
 
 ## Synthetic DNS, both address families
 

@@ -49,7 +49,7 @@ async def lifespan(app):
 
 
 app = FastAPI(
-    title="AccessCheck",
+    title="AccessLens",
     version="2.0.2",
     lifespan=lifespan,
     docs_url=None,
@@ -318,7 +318,7 @@ async def export(scan_id: str, format: str = "json"):
         data,
         media_type=mime,
         headers={
-            "Content-Disposition": f'attachment; filename="accesscheck-{scan.id}.{format}"',
+            "Content-Disposition": f'attachment; filename="accesslens-{scan.id}.{format}"',
             "X-Content-Type-Options": "nosniff",
         },
     )
@@ -326,7 +326,7 @@ async def export(scan_id: str, format: str = "json"):
 
 @app.get("/health")
 async def health():
-    return {"status": "ok", "app": "AccessCheck", "version": "2.0.2"}
+    return {"status": "ok", "app": "AccessLens", "version": "2.0.2"}
 
 
 @app.exception_handler(404)

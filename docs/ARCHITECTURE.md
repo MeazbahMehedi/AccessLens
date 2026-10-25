@@ -1,6 +1,6 @@
 # Architecture
 
-AccessCheck is a local FastAPI application with server-rendered Jinja2 pages and small local JavaScript modules. It scans one public page at a time with Playwright Chromium and a bundled axe-core script.
+AccessLens is a local FastAPI application with server-rendered Jinja2 pages and small local JavaScript modules. It scans one public page at a time with Playwright Chromium and a bundled axe-core script.
 
 ## Request and job flow
 

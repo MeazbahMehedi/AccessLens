@@ -1,5 +1,20 @@
 # Release validation
 
+## AccessLens branding verification — 25 October 2026
+
+The project/root folder, installed CLI, app and report labels, documentation, logo/favicon asset and report download filenames were renamed. The supplied scanner, axe-core bundle/license, basic checks, scoring, storage, network/DNS logic and CSS retain their behavior; changes in those modules are limited to project-name references.
+
+- Full regression suite: **141 passed** on Python 3.12, including real Chromium fixtures, VPN/DNS handling and five-format report downloads. The installed FastAPI/Starlette test client emitted one dependency deprecation warning.
+- CLI installation and help output succeeded with the new `accesslens` command.
+- Browser checks exercised seven rendered pages in light/dark themes at 1440-pixel and 390-pixel widths, including the new title/logo, theme persistence, legacy theme fallback and mobile navigation; no JavaScript exceptions were observed.
+- The 28 page/viewport/theme width measurements matched the original application. This comparison preserves the original responsive behavior, including its existing overflow where present.
+- All five export endpoints produced the renamed attachment filenames. PDF and Word report contents carried the updated branding. The Word/PDF sample reports were rendered for visual review.
+- Configuration checks confirmed the fresh database filename, legacy database selection without changing saved data, and precedence of an explicitly configured database URL.
+
+The original release evidence below retains its original scope. This branding update did not repeat live university/public-site connectivity checks, native Windows/macOS execution or a Docker image build.
+
+## Original release evidence
+
 This release was checked in a Linux environment with Python 3.12 and Playwright Chromium. The regression suite contains **141 passing tests**.
 
 ## DNS compatibility verification
