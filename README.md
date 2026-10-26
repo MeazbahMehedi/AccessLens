@@ -15,7 +15,7 @@ A local-first website accessibility scanner with a multi-page dashboard, WCAG fi
 
 ![img_1.png](img_1.png)
 
-More screens: [Light Mode](docs/screenshots/2.png) ·[New Scan](docs/screenshots/3.png) ·[Searching](docs/screenshots/4.png) ·[Result](docs/screenshots/5.png) ·[Evidence](docs/screenshots/6.png) ·[Report](docs/screenshots/7.png) ·
+More screens: [Light Mode](docs/Screenshots/2.png) ·[New Scan](docs/Screenshots/3.png) ·[Searching](docs/Screenshots/4.png) ·[Result](docs/Screenshots/5.png) ·[Evidence](docs/Screenshots/6.png) ·[Report](docs/Screenshots/7.png) ·
 </div>
 
 ---
