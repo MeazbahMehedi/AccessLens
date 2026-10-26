@@ -74,6 +74,16 @@ The architecture is a **modular monolith**: one Python application serves the in
 | **Developer** | Live public GitHub profile and repositories for MeazbahMehedi |
 | **About** | Program purpose, workflow, scoring, scope and official accessibility resources |
 
+# **Screenshots:**
+
+![img_1.png](img_1.png)
+![img_2.png](img_2.png)
+![img_5.png](img_5.png)
+![img_6.png](img_6.png)
+![img_7.png](img_7.png)
+![img_8.png](img_8.png)
+![img_9.png](img_9.png)
+
 ## Requirements
 
 - Python **3.11 or newer**.
@@ -245,14 +255,14 @@ This verification does not make an unreachable website reachable. Campus-only ac
 From the project directory, using the same Python environment as the server:
 
 ```bash
-python scripts/check_network.py jwxt.zzu.edu.cn
-python scripts/check_network.py jwxt.zzu.edu.cn --browser
+python scripts/check_network.py https://www.wikipedia.org/
+python scripts/check_network.py https://www.wikipedia.org/
 ```
 
 Windows without an activated virtual environment:
 
 ```powershell
-.\.venv\Scripts\python.exe scripts\check_network.py jwxt.zzu.edu.cn
+.\.venv\Scripts\python.exe scripts\check_network.py https://www.wikipedia.org/
 ```
 
 The first command checks target verification. Adding `--browser` runs the real Chromium/axe-core scan and reports the title, engine and findings without writing a database record. This distinguishes a DNS problem from a browser connection, certificate, HTTP or site-access problem.
