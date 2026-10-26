@@ -22,7 +22,7 @@ async def test_profile_pagination_cache_and_outage(monkeypatch):
                 if page == "1"
                 else [{"name": "last-repo"}],
             )
-        return httpx.Response(200, json={"login": "ItsMONIKAAKTER", "public_repos": 101})
+        return httpx.Response(200, json={"login": "MeazbahMehedi", "public_repos": 101})
 
     real = httpx.AsyncClient
     monkeypatch.setattr(
@@ -31,7 +31,7 @@ async def test_profile_pagination_cache_and_outage(monkeypatch):
         lambda **kw: real(**kw, transport=httpx.MockTransport(handler), trust_env=False),
     )
     data = await service.developer_data()
-    assert data["profile"]["login"] == "ItsMONIKAAKTER"
+    assert data["profile"]["login"] == "MeazbahMehedi"
     assert len(data["repos"]) == 101
     await service.developer_data()
     assert len(calls) == 3

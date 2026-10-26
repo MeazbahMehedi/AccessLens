@@ -10,7 +10,7 @@ A local-first website accessibility scanner with a multi-page dashboard, WCAG fi
 
 **Python 3.11+ · FastAPI · Playwright · axe-core · SQLite · MIT**
 
-[Quick start](#quick-start) · [Workspace](#workspace-pages) · [How it works](#how-it-works) · [Reports](#report-exports) · [Troubleshooting](#troubleshooting) · [Developer](https://github.com/ItsMONIKAAKTER)
+[Quick start](#quick-start) · [Workspace](#workspace-pages) · [How it works](#how-it-works) · [Reports](#report-exports) · [Troubleshooting](#troubleshooting) · [Developer](https://github.com/MeazbahMehedi)
 
 </div>
 
@@ -71,7 +71,7 @@ The architecture is a **modular monolith**: one Python application serves the in
 | **Scan history** | Search, filter and reopen saved or in-progress scans |
 | **Scan report** | Status, coverage notes, scores, severity counts, findings, manual-review items and screenshots |
 | **Reports** | Search completed reports and download them in the required format |
-| **Developer** | Live public GitHub profile and repositories for ItsMONIKAAKTER |
+| **Developer** | Live public GitHub profile and repositories for MeazbahMehedi |
 | **About** | Program purpose, workflow, scoring, scope and official accessibility resources |
 
 ## Requirements
@@ -294,7 +294,7 @@ Turning off `DNS_PUBLIC_FALLBACK` disables the compatibility fallback; it does n
 
 ## Developer information
 
-The Developer page is fixed to **[MONIKA AKTER / ItsMONIKAAKTER](https://github.com/ItsMONIKAAKTER)**. Visitors cannot change the account through the website.
+The Developer page is fixed to **[MEAZBAH MEHEDI / MeazbahMehedi](https://github.com/MeazbahMehedi)**. Visitors cannot change the account through the website.
 
 GitHub supplies the profile avatar, public name, bio, location, company, website, public email and other available fields. Repository cards show public metadata such as description, topics, language, stars, forks, open issue/PR counts, license, update date and homepage links when supplied.
 
@@ -409,4 +409,4 @@ If AccessLens is useful to your work, a GitHub star helps others discover it.
 
 Application source is licensed under [MIT](LICENSE). Bundled axe-core is licensed under **Mozilla Public License 2.0**; see its [license](app/engine/vendor/AXE-LICENSE.txt). Dependencies retain their respective licenses.
 
-Maintained by **[MONIKA AKTER / ItsMONIKAAKTER](https://github.com/ItsMONIKAAKTER)**.
+Maintained by **[MEAZBAH MEHEDI / MeazbahMehedi](https://github.com/MeazbahMehedi)**.

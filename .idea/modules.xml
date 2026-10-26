@@ -3,6 +3,7 @@
   <component name="ProjectModuleManager">
     <modules>
       <module fileurl="file://$PROJECT_DIR$/.idea/AccessLens.iml" filepath="$PROJECT_DIR$/.idea/AccessLens.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/accesslens.iml" filepath="$PROJECT_DIR$/.idea/accesslens.iml" />
     </modules>
   </component>
 </project>
