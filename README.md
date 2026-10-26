@@ -13,9 +13,13 @@ A local-first website accessibility scanner with a multi-page dashboard, WCAG fi
 [Quick start](#quick-start) · [Workspace](#workspace-pages) · [How it works](#how-it-works) · [Reports](#report-exports) · [Troubleshooting](#troubleshooting) · [Developer](https://github.com/MeazbahMehedi)
 
 
-![img_1.png](img_1.png)
 
-More screens: [Light Mode](docs/Screenshots/2.png) ·[New Scan](docs/Screenshots/3.png) ·[Searching](docs/Screenshots/4.png) ·[Result](docs/Screenshots/5.png) ·[Evidence](docs/Screenshots/6.png) ·[Report](docs/Screenshots/7.png) ·
+![AccessLens main interface](docs/Screenshots/1.png)
+
+**More Screens:**
+
+[Light Mode](docs/Screenshots/2.png) · [New Scan](docs/Screenshots/3.png) · [Searching](docs/Screenshots/4.png) · [Result](docs/Screenshots/5.png) · [Evidence](docs/Screenshots/6.png) · [Report](docs/Screenshots/7.png)
+
 </div>
 
 ---
