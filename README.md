@@ -12,6 +12,10 @@ A local-first website accessibility scanner with a multi-page dashboard, WCAG fi
 
 [Quick start](#quick-start) · [Workspace](#workspace-pages) · [How it works](#how-it-works) · [Reports](#report-exports) · [Troubleshooting](#troubleshooting) · [Developer](https://github.com/MeazbahMehedi)
 
+
+![img_1.png](img_1.png)
+
+More screens: [Light Mode](docs/screenshots/2.png) ·[New Scan](docs/screenshots/3.png) ·[Searching](docs/screenshots/4.png) ·[Result](docs/screenshots/5.png) ·[Evidence](docs/screenshots/6.png) ·[Report](docs/screenshots/7.png) ·
 </div>
 
 ---
@@ -76,7 +80,7 @@ The architecture is a **modular monolith**: one Python application serves the in
 
 # **Screenshots:**
 
-![img_1.png](img_1.png)
+
 ![img_2.png](img_2.png)
 ![img_5.png](img_5.png)
 ![img_6.png](img_6.png)
